@@ -1,0 +1,52 @@
+services:
+  techchallenge.api:
+    image: ${DOCKER_REGISTRY-}techchallengeapi
+    environment:
+      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=TechChallenge;Username=postgres;Password=Dev@123456"
+      IntegracaoExterna__ApiKey: "${EXTERNAL_INTEGRATION_API_KEY:-demo-integration-key-change-me}"
+      Notifications__Enabled: "true"
+      Notifications__IntervalSeconds: "2"
+      ApprovalLinks__BaseUrl: "${APPROVAL_LINK_BASE_URL:-http://localhost:8080}"
+      ApprovalLinks__ExpirationHours: "48"
+      Smtp__Host: "mailpit"
+      Smtp__Port: "1025"
+      Smtp__UseSsl: "false"
+      Smtp__AllowInsecureConnection: "true"
+      Smtp__FromAddress: "nao-responda@oficina.local"
+      Smtp__FromName: "Oficina Tech Challenge"
+    depends_on:
+      db:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    build:
+      context: ..
+      dockerfile: src/TechChallenge.Api/Dockerfile
+
+  db: 
+    image: postgres:latest
+    environment:
+      POSTGRES_DB: "TechChallenge"
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "Dev@123456"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d TechChallenge"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mailpit:
+    image: axllent/mailpit:v1.31.0
+    restart: unless-stopped
+
+  sonarqube:
+    image: sonarqube:community
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+      - sonarqube_logs:/opt/sonarqube/logs
+
+volumes:
+  sonarqube_data:
+  sonarqube_extensions:
+  sonarqube_logs:

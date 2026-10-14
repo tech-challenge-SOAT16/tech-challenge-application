@@ -1,0 +1,28 @@
+<Solution>
+  <Folder Name="/0 - docs/">
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/1 - presentation/">
+    <Project Path="src/TechChallenge.Api/TechChallenge.Api.csproj" />
+  </Folder>
+  <Folder Name="/2 - domain/">
+    <Project Path="src/TechChallenge.Domain/TechChallenge.Domain.csproj" />
+  </Folder>
+  <Folder Name="/3 - application/">
+    <Project Path="src/TechChallenge.Application.Abstractions/TechChallenge.Application.Abstractions.csproj" />
+    <Project Path="src/TechChallenge.Application/TechChallenge.Application.csproj" />
+  </Folder>
+  <Folder Name="/4 - Infrastructure/">
+    <Project Path="src/TechChallenge.Infrastructure.Auth/TechChallenge.Infrastructure.Auth.csproj" />
+    <Project Path="src/TechChallenge.Infrastructure.Database/TechChallenge.Infrastructure.Database.csproj" />
+    <Project Path="src/TechChallenge.Infrastructure.IoC/TechChallenge.Infrastructure.IoC.csproj" Id="08b3a101-7172-491d-a728-02e933217b7c" />
+    <Project Path="src/TechChallenge.Infrastructure.Notifications/TechChallenge.Infrastructure.Notifications.csproj" />
+  </Folder>
+  <Folder Name="/5 - tests/">
+    <Project Path="tests/TechChallenge.IntegrationTests/TechChallenge.IntegrationTests.csproj" />
+    <Project Path="tests\TechChallenge.Tests\TechChallenge.Tests.csproj" />
+  </Folder>
+  <Project Path="docker-compose/docker-compose.dcproj">
+    <Build />
+  </Project>
+</Solution>

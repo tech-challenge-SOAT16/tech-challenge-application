@@ -1,0 +1,20 @@
+@baseUrl = http://localhost:8080
+
+### Acompanhamento público da OS concluída no arquivo 01
+GET {{baseUrl}}/api/v1/ordens-servico/acompanhamento/{{codigoAcompanhamento}}
+Accept: application/json
+
+### Tempo médio de execução
+GET {{baseUrl}}/api/v1/ordens-servico/tempo-medio-execucao
+Authorization: Bearer {{vendedorToken}}
+Accept: application/json
+
+### Fila operacional priorizada
+GET {{baseUrl}}/api/v1/ordens-servico/oficina
+Authorization: Bearer {{vendedorToken}}
+Accept: application/json
+
+### Inventário após a baixa da OS aprovada
+GET {{baseUrl}}/api/v1/produtos
+Authorization: Bearer {{vendedorToken}}
+Accept: application/json

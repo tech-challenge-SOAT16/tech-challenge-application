@@ -1,0 +1,108 @@
+@baseUrl = http://localhost:8080
+@integrationKey = demo-integration-key-change-me
+@clienteId = aaaaaaaa-0000-0000-0000-000000000001
+@vendedorId = aaaaaaaa-0000-0000-0000-000000000003
+@mecanicoId = aaaaaaaa-0000-0000-0000-000000000005
+@veiculoId = aaaaaaaa-0000-0000-0000-000000000008
+@servicoDiagnosticoId = aaaaaaaa-0000-0000-0000-000000000010
+@produtoFiltroId = aaaaaaaa-0000-0000-0000-000000000011
+
+### 1. Abrir a OS
+# @name criarOsAprovacao
+POST {{baseUrl}}/api/v1/ordens-servico
+Authorization: Bearer {{vendedorToken}}
+Content-Type: application/json
+
+{
+  "descricao": "Demo da aprovação externa do orçamento",
+  "clienteResponsavelId": "{{clienteId}}",
+  "funcionarioResponsavelId": "{{vendedorId}}",
+  "veiculoId": "{{veiculoId}}"
+}
+
+> {%
+client.global.set("osAprovacaoId", response.body);
+%}
+
+### 2. Atribuir ao mecânico
+PATCH {{baseUrl}}/api/v1/ordens-servico/{{osAprovacaoId}}/atribuir
+Authorization: Bearer {{mecanicoToken}}
+Content-Type: application/json
+
+{
+  "mecanicoId": "{{mecanicoId}}"
+}
+
+### 3. Registrar diagnóstico, serviço e produto
+PATCH {{baseUrl}}/api/v1/ordens-servico/{{osAprovacaoId}}/diagnostico
+Authorization: Bearer {{mecanicoToken}}
+Content-Type: application/json
+
+{
+  "servicos": [
+    {
+      "id": "{{servicoDiagnosticoId}}",
+      "quantidade": 1
+    }
+  ],
+  "produtos": [
+    {
+      "id": "{{produtoFiltroId}}",
+      "quantidade": 1
+    }
+  ]
+}
+
+### 4. Enviar orçamento
+PATCH {{baseUrl}}/api/v1/ordens-servico/{{osAprovacaoId}}/orcamento/enviar
+Authorization: Bearer {{mecanicoToken}}
+
+### 5. Receber aprovação pelo webhook externo
+< {%
+client.global.set("eventoAprovacaoId", "demo-aprovacao-" + Date.now());
+%}
+POST {{baseUrl}}/api/v1/integracoes/orcamentos/respostas
+X-Integration-Key: {{integrationKey}}
+Content-Type: application/json
+
+{
+  "eventoId": "{{eventoAprovacaoId}}",
+  "ordemServicoId": "{{osAprovacaoId}}",
+  "decisao": "Aprovado",
+  "ocorridoEm": "2026-09-01T09:00:00Z"
+}
+
+### 6. Repetir exatamente o mesmo evento
+# Esperado: 200 OK, processado false e duplicado true.
+POST {{baseUrl}}/api/v1/integracoes/orcamentos/respostas
+X-Integration-Key: {{integrationKey}}
+Content-Type: application/json
+
+{
+  "eventoId": "{{eventoAprovacaoId}}",
+  "ordemServicoId": "{{osAprovacaoId}}",
+  "decisao": "Aprovado",
+  "ocorridoEm": "2026-09-01T09:00:00Z"
+}
+
+### 7. Finalizar a OS
+PATCH {{baseUrl}}/api/v1/ordens-servico/{{osAprovacaoId}}/finalizar
+Authorization: Bearer {{mecanicoToken}}
+
+### 8. Entregar a OS
+PATCH {{baseUrl}}/api/v1/ordens-servico/{{osAprovacaoId}}/entregar
+Authorization: Bearer {{vendedorToken}}
+
+### 9. Consultar o resultado e guardar o código público
+# @name consultarOsAprovada
+GET {{baseUrl}}/api/v1/ordens-servico/{{osAprovacaoId}}
+Authorization: Bearer {{vendedorToken}}
+Accept: application/json
+
+> {%
+client.global.set("codigoAcompanhamento", response.body.codigoAcompanhamento);
+%}
+
+### 10. Consultar o Mailpit pela API
+GET http://localhost:8025/api/v1/messages
+Accept: application/json

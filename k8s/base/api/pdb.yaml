@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: techchallenge-api
+  labels:
+    app.kubernetes.io/name: techchallenge-api
+    app.kubernetes.io/part-of: techchallenge
+spec:
+  # Mantém ao menos um pod servindo durante drains de nó e atualizações do cluster.
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: techchallenge-api

@@ -1,0 +1,48 @@
+@baseUrl = http://localhost:8080
+
+### Login administrador
+# @name loginAdmin
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "login": "admin.demo",
+  "senha": "Demo@123"
+}
+
+> {%
+client.global.set("adminToken", response.body.accessToken);
+%}
+
+### Login vendedor
+# @name loginVendedor
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "login": "vendedor.demo",
+  "senha": "Demo@123"
+}
+
+> {%
+client.global.set("vendedorToken", response.body.accessToken);
+%}
+
+### Login mecânico
+# @name loginMecanico
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "login": "mecanico.demo",
+  "senha": "Demo@123"
+}
+
+> {%
+client.global.set("mecanicoToken", response.body.accessToken);
+%}
+
+### Conferir autenticação do mecânico
+GET {{baseUrl}}/api/v1/auth/me
+Authorization: Bearer {{mecanicoToken}}
+Accept: application/json

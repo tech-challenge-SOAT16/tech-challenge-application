@@ -1,0 +1,86 @@
+@baseUrl = http://localhost:8080
+@integrationKey = demo-integration-key-change-me
+@clienteId = aaaaaaaa-0000-0000-0000-000000000001
+@vendedorId = aaaaaaaa-0000-0000-0000-000000000003
+@mecanicoId = aaaaaaaa-0000-0000-0000-000000000005
+@veiculoId = aaaaaaaa-0000-0000-0000-000000000008
+@servicoDiagnosticoId = aaaaaaaa-0000-0000-0000-000000000010
+
+### 1. Abrir outra OS
+# @name criarOsRecusa
+POST {{baseUrl}}/api/v1/ordens-servico
+Authorization: Bearer {{vendedorToken}}
+Content-Type: application/json
+
+{
+  "descricao": "Demo da recusa externa do orçamento",
+  "clienteResponsavelId": "{{clienteId}}",
+  "funcionarioResponsavelId": "{{vendedorId}}",
+  "veiculoId": "{{veiculoId}}"
+}
+
+> {%
+client.global.set("osRecusaId", response.body);
+%}
+
+### 2. Atribuir ao mecânico
+PATCH {{baseUrl}}/api/v1/ordens-servico/{{osRecusaId}}/atribuir
+Authorization: Bearer {{mecanicoToken}}
+Content-Type: application/json
+
+{
+  "mecanicoId": "{{mecanicoId}}"
+}
+
+### 3. Registrar diagnóstico
+PATCH {{baseUrl}}/api/v1/ordens-servico/{{osRecusaId}}/diagnostico
+Authorization: Bearer {{mecanicoToken}}
+Content-Type: application/json
+
+{
+  "servicos": [
+    {
+      "id": "{{servicoDiagnosticoId}}",
+      "quantidade": 1
+    }
+  ],
+  "produtos": []
+}
+
+### 4. Enviar orçamento
+PATCH {{baseUrl}}/api/v1/ordens-servico/{{osRecusaId}}/orcamento/enviar
+Authorization: Bearer {{mecanicoToken}}
+
+### 5. Receber recusa pelo webhook externo
+< {%
+client.global.set("eventoRecusaId", "demo-recusa-" + Date.now());
+%}
+POST {{baseUrl}}/api/v1/integracoes/orcamentos/respostas
+X-Integration-Key: {{integrationKey}}
+Content-Type: application/json
+
+{
+  "eventoId": "{{eventoRecusaId}}",
+  "ordemServicoId": "{{osRecusaId}}",
+  "decisao": "Recusado",
+  "motivo": "Cliente não aprovou o valor do orçamento",
+  "ocorridoEm": "2026-09-01T09:05:00Z"
+}
+
+### 6. Demonstrar conflito de idempotência
+# Esperado: 409, pois o mesmo evento não pode mudar de conteúdo.
+POST {{baseUrl}}/api/v1/integracoes/orcamentos/respostas
+X-Integration-Key: {{integrationKey}}
+Content-Type: application/json
+
+{
+  "eventoId": "{{eventoRecusaId}}",
+  "ordemServicoId": "{{osRecusaId}}",
+  "decisao": "Aprovado",
+  "ocorridoEm": "2026-09-01T09:05:00Z"
+}
+
+### 7. Consultar a OS reprovada
+GET {{baseUrl}}/api/v1/ordens-servico/{{osRecusaId}}
+Authorization: Bearer {{vendedorToken}}
+Accept: application/json

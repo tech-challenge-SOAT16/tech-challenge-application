@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Namespace criado pelo repositório de infraestrutura (Terraform).
+namespace: techchallenge
+
+resources:
+  - ../../base
+  - hpa.yaml
+
+patches:
+  - path: configmap-patch.yaml
+
+# Rótulos comuns adicionados apenas aos metadados (sem alterar selectors imutáveis).
+labels:
+  - includeSelectors: false
+    pairs:
+      app.kubernetes.io/managed-by: kustomize
+      app.kubernetes.io/environment: aws-eks
+
+images:
+  # newName/newTag são sobrescritos pelo pipeline (deploy.yml) com a URI do ECR
+  # e a tag imutável (SHA do commit). Os valores abaixo são apenas placeholders
+  # para renderização local com `kubectl kustomize`.
+  - name: techchallenge-application
+    newName: 000000000000.dkr.ecr.us-east-1.amazonaws.com/techchallenge-application
+    newTag: latest

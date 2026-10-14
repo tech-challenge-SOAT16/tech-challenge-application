@@ -1,0 +1,91 @@
+@baseUrl = http://localhost:8080
+@clienteId = aaaaaaaa-0000-0000-0000-000000000001
+@vendedorId = aaaaaaaa-0000-0000-0000-000000000003
+@mecanicoId = aaaaaaaa-0000-0000-0000-000000000005
+@veiculoId = aaaaaaaa-0000-0000-0000-000000000008
+@servicoDiagnosticoId = aaaaaaaa-0000-0000-0000-000000000010
+@produtoFiltroId = aaaaaaaa-0000-0000-0000-000000000011
+
+### 1. Abrir a OS
+# @name criarOsAprovacaoEmail
+POST {{baseUrl}}/api/v1/ordens-servico
+Authorization: Bearer {{vendedorToken}}
+Content-Type: application/json
+
+{
+  "descricao": "Demo da aprovação pelo link do e-mail",
+  "clienteResponsavelId": "{{clienteId}}",
+  "funcionarioResponsavelId": "{{vendedorId}}",
+  "veiculoId": "{{veiculoId}}"
+}
+
+> {%
+client.global.set("osAprovacaoEmailId", response.body);
+%}
+
+### 2. Conferir o status inicial
+GET {{baseUrl}}/api/v1/ordens-servico/{{osAprovacaoEmailId}}/status
+Authorization: Bearer {{vendedorToken}}
+Accept: application/json
+
+### 3. Atribuir ao mecânico
+PATCH {{baseUrl}}/api/v1/ordens-servico/{{osAprovacaoEmailId}}/atribuir
+Authorization: Bearer {{mecanicoToken}}
+Content-Type: application/json
+
+{
+  "mecanicoId": "{{mecanicoId}}"
+}
+
+### 4. Registrar diagnóstico, serviço e produto
+PATCH {{baseUrl}}/api/v1/ordens-servico/{{osAprovacaoEmailId}}/diagnostico
+Authorization: Bearer {{mecanicoToken}}
+Content-Type: application/json
+
+{
+  "servicos": [
+    {
+      "id": "{{servicoDiagnosticoId}}",
+      "quantidade": 1
+    }
+  ],
+  "produtos": [
+    {
+      "id": "{{produtoFiltroId}}",
+      "quantidade": 1
+    }
+  ]
+}
+
+### 5. Enviar orçamento
+PATCH {{baseUrl}}/api/v1/ordens-servico/{{osAprovacaoEmailId}}/orcamento/enviar
+Authorization: Bearer {{mecanicoToken}}
+
+### 6. Consultar a caixa de entrada
+# Abra http://localhost:8025, selecione o e-mail mais recente e pressione
+# "Aprovar orçamento". Na página aberta, confirme a aprovação.
+GET http://localhost:8025/api/v1/messages
+Accept: application/json
+
+### 7. Conferir o status depois da confirmação no navegador
+GET {{baseUrl}}/api/v1/ordens-servico/{{osAprovacaoEmailId}}/status
+Authorization: Bearer {{vendedorToken}}
+Accept: application/json
+
+### 8. Finalizar a OS aprovada
+PATCH {{baseUrl}}/api/v1/ordens-servico/{{osAprovacaoEmailId}}/finalizar
+Authorization: Bearer {{mecanicoToken}}
+
+### 9. Entregar a OS
+PATCH {{baseUrl}}/api/v1/ordens-servico/{{osAprovacaoEmailId}}/entregar
+Authorization: Bearer {{vendedorToken}}
+
+### 10. Consultar o resultado e guardar o código público
+# @name consultarOsAprovadaEmail
+GET {{baseUrl}}/api/v1/ordens-servico/{{osAprovacaoEmailId}}
+Authorization: Bearer {{vendedorToken}}
+Accept: application/json
+
+> {%
+client.global.set("codigoAcompanhamento", response.body.codigoAcompanhamento);
+%}

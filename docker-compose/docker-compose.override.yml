@@ -1,0 +1,16 @@
+services:
+  techchallenge.api:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_HTTP_PORTS=8080
+    ports:
+      - "8080:8080"
+  db:
+    ports:
+      - "5432:5432"
+  mailpit:
+    ports:
+      - "8025:8025"
+  sonarqube:
+    ports:
+      - "9000:9000"

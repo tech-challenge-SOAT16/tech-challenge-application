@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: techchallenge-api-config
+# Apenas configurações NÃO sensíveis. Os valores concretos são fornecidos pelo
+# patch de cada overlay. Segredos (connection string, chaves JWT, API key e
+# credenciais SMTP) ficam no Secret techchallenge-api-secrets, criado pelo
+# repositório de infraestrutura.
+data: {}

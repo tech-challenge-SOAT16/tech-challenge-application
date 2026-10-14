@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: techchallenge-api
+  labels:
+    app.kubernetes.io/name: techchallenge-api
+    app.kubernetes.io/part-of: techchallenge
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: techchallenge-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

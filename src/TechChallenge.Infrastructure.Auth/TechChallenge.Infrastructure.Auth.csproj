@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.9" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.9" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TechChallenge.Application.Abstractions\TechChallenge.Application.Abstractions.csproj" />
+    <ProjectReference Include="..\TechChallenge.Application\TechChallenge.Application.csproj" />
+    <ProjectReference Include="..\TechChallenge.Domain\TechChallenge.Domain.csproj" />
+    <ProjectReference Include="..\TechChallenge.Infrastructure.Database\TechChallenge.Infrastructure.Database.csproj" />
+  </ItemGroup>
+
+</Project>

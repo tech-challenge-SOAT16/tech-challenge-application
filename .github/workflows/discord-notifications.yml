@@ -1,0 +1,154 @@
+name: Discord notifications
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - ready_for_review
+      - closed
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  notify:
+    name: Notify Discord
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'push' ||
+      github.event.action != 'closed' ||
+      github.event.pull_request.merged == true
+    steps:
+      - name: Build Discord payload
+        id: payload
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
+          REPOSITORY: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+          REF_NAME: ${{ github.ref_name }}
+          PUSH_URL: ${{ github.event.head_commit.url }}
+          PUSH_MESSAGE: ${{ github.event.head_commit.message }}
+          PUSH_COMPARE_URL: ${{ github.event.compare }}
+          PUSH_COMMITS: ${{ toJson(github.event.commits) }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_MERGED: ${{ github.event.pull_request.merged }}
+          DISCORD_ROLE_ID: ${{ vars.DISCORD_ROLE_ID || secrets.DISCORD_ROLE_ID }}
+        run: |
+          if [ "$EVENT_NAME" = "push" ]; then
+            title="Push to main"
+            commit_count=$(jq 'length' <<< "$PUSH_COMMITS")
+            description="${commit_count} commit pushed"
+            if [ "$commit_count" != "1" ]; then
+              description="${commit_count} commits pushed"
+            fi
+            url="$PUSH_COMPARE_URL"
+            commits=$(jq -r '
+              .[:5]
+              | map("[`" + (.id[0:7]) + "`](" + .url + ") " + (.message | split("\n")[0]))
+              | join("\n")
+            ' <<< "$PUSH_COMMITS")
+            if [ "$commit_count" -gt 5 ]; then
+              remaining=$((commit_count - 5))
+              commits="${commits}"$'\n'"...and ${remaining} more commits"
+            fi
+            color=3066993
+            fields=$(jq -n \
+              --arg repo "$REPOSITORY" \
+              --arg branch "$REF_NAME" \
+              --arg actor "$ACTOR" \
+              --arg commits "$commits" \
+              --arg link "$PUSH_COMPARE_URL" \
+              '[
+                {name: "Repository", value: $repo, inline: true},
+                {name: "Branch", value: $branch, inline: true},
+                {name: "Author", value: $actor, inline: true},
+                {name: "Commits", value: $commits, inline: false},
+                {name: "Link", value: $link, inline: false}
+              ]')
+          elif [ "$EVENT_ACTION" = "closed" ] && [ "$PR_MERGED" = "true" ]; then
+            title="PR merged"
+            description="#${PR_NUMBER} ${PR_TITLE}"
+            url="$PR_URL"
+            color=5763719
+            fields=$(jq -n \
+              --arg repo "$REPOSITORY" \
+              --arg actor "$ACTOR" \
+              --arg link "$PR_URL" \
+              '[
+                {name: "Repository", value: $repo, inline: true},
+                {name: "Merged by", value: $actor, inline: true},
+                {name: "Link", value: $link, inline: false}
+              ]')
+          else
+            title="PR ${EVENT_ACTION}"
+            description="#${PR_NUMBER} ${PR_TITLE}"
+            url="$PR_URL"
+            color=3447003
+            fields=$(jq -n \
+              --arg repo "$REPOSITORY" \
+              --arg actor "$ACTOR" \
+              --arg link "$PR_URL" \
+              '[
+                {name: "Repository", value: $repo, inline: true},
+                {name: "Actor", value: $actor, inline: true},
+                {name: "Link", value: $link, inline: false}
+              ]')
+          fi
+
+          mention=""
+          mentioned_roles="[]"
+          if [ -n "$DISCORD_ROLE_ID" ]; then
+            mention="<@&${DISCORD_ROLE_ID}>"
+            mentioned_roles=$(jq -n --arg role "$DISCORD_ROLE_ID" '[$role]')
+          fi
+
+          jq -n \
+            --arg content "$mention" \
+            --arg title "$title" \
+            --arg description "$description" \
+            --arg url "$url" \
+            --argjson color "$color" \
+            --argjson fields "$fields" \
+            --argjson roles "$mentioned_roles" \
+            '{
+              username: "Captain Hook",
+              content: $content,
+              allowed_mentions: {
+                parse: [],
+                roles: $roles
+              },
+              embeds: [
+                {
+                  title: $title,
+                  description: $description,
+                  url: $url,
+                  color: $color,
+                  fields: $fields,
+                  timestamp: now | todate
+                }
+              ]
+            }' > payload.json
+
+      - name: Send Discord notification
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "Missing DISCORD_WEBHOOK_URL secret."
+            exit 1
+          fi
+
+          curl --fail-with-body \
+            -H "Content-Type: application/json" \
+            -d @payload.json \
+            "$DISCORD_WEBHOOK_URL"
