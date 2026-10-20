@@ -14,3 +14,8 @@ services:
   sonarqube:
     ports:
       - "9000:9000"
+  kong:
+    ports:
+      - "8000:8000" # Proxy público local
+      - "127.0.0.1:8001:8001" # Admin API: nunca publicar fora da máquina
+      - "127.0.0.1:8002:8002" # Kong Manager
