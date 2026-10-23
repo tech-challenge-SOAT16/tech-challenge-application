@@ -8,6 +8,9 @@ services:
     environment:
       GF_SECURITY_ADMIN_USER: "admin"
       GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-admin}"
+      # Injeta o ponto zero de cada série nova a partir do start time do OTLP,
+      # para que increase() conte também o primeiro evento após um restart da API.
+      PROMETHEUS_EXTRA_ARGS: "--enable-feature=created-timestamp-zero-ingestion"
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/otel-lgtm/grafana/conf/provisioning/dashboards/techchallenge/techchallenge-ordens-servico.json"
     volumes:
       - otel-lgtm-data:/data

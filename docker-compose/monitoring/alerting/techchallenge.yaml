@@ -10,7 +10,7 @@
       "rules": [
         {
           "uid": "tc-os-falhas",
-          "title": "Falhas no processamento de ordens de serviço",
+          "title": "Falhas no processamento de ordens de serviço (5xx)",
           "condition": "C",
           "for": "1m",
           "noDataState": "OK",
@@ -20,7 +20,7 @@
             "service": "techchallenge-api"
           },
           "annotations": {
-            "summary": "Exceções em rotas de ordens de serviço nos últimos 5 minutos: {{ $values.B }}",
+            "summary": "Erros internos (5xx) em rotas de ordens de serviço nos últimos 5 minutos: {{ $values.B }}",
             "dashboardUid": "techchallenge-os"
           },
           "data": [
@@ -33,7 +33,7 @@
               "datasourceUid": "prometheus",
               "model": {
                 "refId": "A",
-                "expr": "sum(increase(techchallenge_processamento_falhas_total{area=\"ordens-servico\"}[5m])) or vector(0)",
+                "expr": "sum(increase(techchallenge_processamento_falhas_total{area=\"ordens-servico\",status_code=~\"5..\"}[5m])) or vector(0)",
                 "instant": true,
                 "range": false
               }
