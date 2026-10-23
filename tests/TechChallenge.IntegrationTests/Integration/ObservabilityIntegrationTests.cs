@@ -54,6 +54,30 @@ public class ObservabilityIntegrationTests
     }
 
     [Fact]
+    public async Task CorpoInvalidoDeveRetornar400()
+    {
+        using var factory = CreateFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost")
+        });
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/integracoes/orcamentos/respostas")
+        {
+            Content = new StringContent(
+                """{"eventoId":"x","ordemServicoId":"aaaaaaaa-0000-0000-0000-000000000001","decisao":"Talvez","ocorridoEm":"2026-10-23T09:00:00Z"}""",
+                System.Text.Encoding.UTF8,
+                "application/json")
+        };
+        request.Headers.Add("X-Integration-Key", "integration-test-key");
+        request.Headers.Add(CorrelationIdMiddleware.HeaderName, "corpo-invalido");
+
+        var response = await client.SendAsync(request);
+
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
+        response.Headers.GetValues(CorrelationIdMiddleware.HeaderName).Should().ContainSingle("corpo-invalido");
+    }
+
+    [Fact]
     public async Task DeveRegistrarTempoNoStatusAnteriorAoTransicionarOS()
     {
         var medicoes = new ConcurrentBag<(double Valor, string? Status)>();

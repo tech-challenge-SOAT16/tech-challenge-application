@@ -41,6 +41,7 @@ namespace TechChallenge.Api.Middleware
 
                 int statusCode = ex switch
                 {
+                    BadHttpRequestException badRequest => badRequest.StatusCode,
                     NotFoundException => StatusCodes.Status404NotFound,
                     BadRequestException => StatusCodes.Status400BadRequest,
                     ValidationException => StatusCodes.Status400BadRequest,
@@ -123,11 +124,13 @@ namespace TechChallenge.Api.Middleware
             StatusCodes.Status401Unauthorized => "Não autorizado.",
             StatusCodes.Status404NotFound => "Recurso não encontrado.",
             StatusCodes.Status409Conflict => "Conflito de atualização.",
+            < StatusCodes.Status500InternalServerError => "Requisição inválida.",
             _ => "Erro interno."
         };
 
         private static bool ShouldExposeMessage(Exception ex) => ex switch
         {
+            BadHttpRequestException => true,
             NotFoundException => true,
             BadRequestException => true,
             UnauthorizedException => true,
