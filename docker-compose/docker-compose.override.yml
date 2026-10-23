@@ -11,6 +11,11 @@ services:
   mailpit:
     ports:
       - "8025:8025"
+  otel-lgtm:
+    ports:
+      - "3000:3000" # Grafana
+      - "127.0.0.1:4317:4317" # OTLP gRPC
+      - "127.0.0.1:4318:4318" # OTLP HTTP
   sonarqube:
     ports:
       - "9000:9000"
