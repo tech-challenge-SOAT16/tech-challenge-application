@@ -197,6 +197,15 @@ caracteres do SHA e o SHA completo no rótulo OCI. Após a publicação, o workf
 atualiza automaticamente a tag imutável do overlay Kubernetes. No Docker Desktop
 em Apple Silicon, essa imagem é executada por emulação.
 
+## Monitoramento
+
+A API exporta traces, métricas e logs via OpenTelemetry. O compose inclui o
+`grafana/otel-lgtm` (Collector, Prometheus, Loki, Tempo e Grafana) com os
+dashboards e alertas já provisionados. Grafana em `http://localhost:3000`
+(`admin`/`admin`). Detalhes em [docs/monitoramento.md](docs/monitoramento.md);
+requisições para gerar dados em
+[docs/demo/fase-3/monitoramento.http](docs/demo/fase-3/monitoramento.http).
+
 ## Testes
 
 ```bash
