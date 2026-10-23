@@ -116,7 +116,16 @@ reutilizada ou rotacionada junto com a chave privada RSA da Function.
 
 ## Pendências de integração
 
-As decisões e valores ainda não disponíveis estão consolidados em
-[ToDo](ToDo.md). Antes de habilitar produção devem ser confirmados o issuer,
-audience, URLs de discovery/JWKS, ownership de refresh/logout/senha, persistência
-de usuários e estratégia de revogação.
+Antes de habilitar o ambiente de produção, confirmar com o repositório da
+Function Serverless:
+
+- URL definitiva do emissor (`Jwt__Authority` / `Jwt__Issuer`) publicada pelo
+  API Gateway;
+- URL do documento de discovery, caso não siga o padrão
+  `{Authority}/.well-known/openid-configuration` (seria aplicada em
+  `Jwt__MetadataAddress`);
+- `aud` definitivo exigido pela Function (hoje usamos `techchallenge-api`);
+- quem é dono dos fluxos de refresh, logout e troca de senha — Function ou API;
+- base de persistência dos usuários (compartilhada com a API ou própria da
+  Function) e estratégia de revogação de tokens (lista negra, `jti` curto,
+  rotação de `kid`).

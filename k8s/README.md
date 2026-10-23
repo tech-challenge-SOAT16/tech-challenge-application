@@ -96,6 +96,3 @@ O HPA mantém de 2 a 10 réplicas, com alvo de 70% de CPU e 80% de memória. O
 PodDisruptionBudget preserva ao menos um pod em interrupções voluntárias. O
 Metrics Server deve existir no cluster. A API usa startup, readiness e liveness
 probes; migrations e seed são executados antes de começar a servir HTTP.
-
-Todas as configurações e integrações ainda pendentes estão em
-[`docs/ToDo.md`](../docs/ToDo.md).

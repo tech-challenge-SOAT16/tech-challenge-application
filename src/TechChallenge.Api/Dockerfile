@@ -4,8 +4,10 @@
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
 USER $APP_UID
 WORKDIR /app
+# A aplicação é configurada por ASPNETCORE_HTTP_PORTS=8080 (ver ConfigMap do
+# overlay k8s). O Service ClusterIP e as probes também usam 8080. HTTPS termina
+# no API Gateway, então não há segunda porta.
 EXPOSE 8080
-EXPOSE 8081
 
 
 # This stage is used to build the service project
