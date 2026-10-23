@@ -58,10 +58,15 @@ public class OrdemServico
         Acrescimo = acrescimo;
     }
 
-    public void TransicionarPara(StatusOS novoStatus)
+    public void ValidarTransicaoPara(StatusOS novoStatus)
     {
         if (!Transicoes.TryGetValue(Status, out var permitidos) || !permitidos.Contains(novoStatus))
             throw new InvalidOperationException($"Transição inválida: {Status} -> {novoStatus}.");
+    }
+
+    public void TransicionarPara(StatusOS novoStatus)
+    {
+        ValidarTransicaoPara(novoStatus);
 
         var statusAnterior = Status;
         var agora = DateTime.UtcNow;
