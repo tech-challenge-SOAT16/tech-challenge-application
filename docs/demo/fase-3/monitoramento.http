@@ -88,7 +88,7 @@ Authorization: Bearer {{mecanicoToken}}
 GET {{baseUrl}}/api/v1/ordens-servico/00000000-0000-0000-0000-000000000000
 Authorization: Bearer {{vendedorToken}}
 
-### 11. Erro de integração: corpo inválido no webhook (5xx) -> trace com erro no Tempo
+### 11. Erro de integração: corpo inválido no webhook (400) -> painel de erros nas integrações
 POST {{baseUrl}}/api/v1/integracoes/orcamentos/respostas
 X-Integration-Key: {{integrationKey}}
 Content-Type: application/json

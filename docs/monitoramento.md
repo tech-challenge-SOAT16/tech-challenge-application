@@ -54,9 +54,14 @@ Meter `TechChallenge.OrdensServico` (`TechChallengeMetrics`):
 | `techchallenge_os_criadas_total` | contador | — | abertura de OS |
 | `techchallenge_os_transicoes_total` | contador | `status_anterior`, `status_atual` | mudança de status persistida |
 | `techchallenge_os_tempo_status_seconds` | histograma | `status` | tempo no status que terminou (desde a transição anterior registrada na outbox) |
-| `techchallenge_notificacoes_enviadas_total` / `_falhas_total` | contador | `status` | worker da outbox de e-mail |
+| `techchallenge_notificacoes_enviadas_total` | contador | `status` | e-mail entregue pela outbox |
+| `techchallenge_notificacoes_falhas_total` | contador | `status` | cada tentativa de envio que falhou |
+| `techchallenge_notificacoes_com_falha_total` | contador | `status` | notificação que falhou pela primeira vez (conta uma vez) |
+| `techchallenge_notificacoes_recuperadas_total` | contador | `status` | notificação entregue após falhas |
 | `techchallenge_integracoes_decisoes_total` | contador | `decisao`, `resultado` | webhook de decisão de orçamento |
 | `techchallenge_processamento_falhas_total` | contador | `area`, `tipo`, `status_code` | exceções tratadas pela API |
+
+Notificações pendentes = `com_falha` − `recuperadas` (a outbox reenvia sem limite, com espera crescente até 5 minutos).
 
 Também são exportadas as métricas padrão de ASP.NET Core, Kestrel, HttpClient,
 runtime .NET, processo e Npgsql.
@@ -81,7 +86,7 @@ Tempo: { span.correlation.id = "demo-123" }
 
 | Regra | Condição |
 | --- | --- |
-| Falhas no processamento de ordens de serviço | exceções em `/api/v1/ordens-servico` nos últimos 5 min > 0 |
+| Falhas no processamento de ordens de serviço (5xx) | erros internos em `/api/v1/ordens-servico` nos últimos 5 min > 0 (4xx de regra de negócio aparecem só no painel) |
 | Falhas no envio de notificações | falhas de e-mail da outbox nos últimos 5 min > 0 |
 | Taxa de erro 5xx da API acima de 5% | 5xx / total nos últimos 5 min |
 | Latência p95 da API acima de 1s | p95 HTTP (sem health checks) |
