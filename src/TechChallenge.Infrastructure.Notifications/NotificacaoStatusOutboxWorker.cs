@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TechChallenge.Application.Abstractions.Notifications;
+using TechChallenge.Application.Abstractions.Observability;
 using TechChallenge.Application.Abstractions.Repositories;
 using TechChallenge.Domain.Entities;
 using TechChallenge.Domain.Enums;
@@ -100,6 +101,7 @@ public class NotificacaoStatusOutboxWorker : BackgroundService
 
             notificacao.MarcarComoEnviada(DateTime.UtcNow);
             await repository.SalvarAsync(cancellationToken);
+            TechChallengeMetrics.NotificacoesEnviadas.Add(1, StatusTag(notificacao));
 
             _logger.LogInformation(
                 "Notificação {NotificacaoId} da OS {OrdemServicoId} enviada com sucesso.",
@@ -114,6 +116,7 @@ public class NotificacaoStatusOutboxWorker : BackgroundService
         {
             notificacao.RegistrarFalha(exception.Message, DateTime.UtcNow);
             await repository.SalvarAsync(cancellationToken);
+            TechChallengeMetrics.NotificacoesFalhas.Add(1, StatusTag(notificacao));
 
             _logger.LogWarning(
                 exception,
@@ -122,6 +125,9 @@ public class NotificacaoStatusOutboxWorker : BackgroundService
                 notificacao.Id);
         }
     }
+
+    private static KeyValuePair<string, object?> StatusTag(NotificacaoStatusOutbox notificacao) =>
+        new("status", notificacao.StatusAtual.ToString());
 
     private static async Task<OrcamentoEmailResumo?> ObterResumoOrcamentoAsync(
         NotificacaoStatusOutbox notificacao,

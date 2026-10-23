@@ -1,6 +1,8 @@
-﻿using FluentValidation;
+﻿using System.Diagnostics;
+using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using TechChallenge.Application.Abstractions.Observability;
 using TechChallenge.Infrastructure.IoC.Exceptions;
 using TechChallenge.Domain.Exceptions;
 
@@ -51,6 +53,8 @@ namespace TechChallenge.Api.Middleware
                     _ => StatusCodes.Status500InternalServerError
                 };
 
+                RegistrarFalha(httpContext, ex, statusCode);
+
                 httpContext.Response.StatusCode = statusCode;
                 httpContext.Response.ContentType = "application/json";
 
@@ -68,6 +72,7 @@ namespace TechChallenge.Api.Middleware
                         Title = "Ocorreram erros de validação."
                     };
                     problemDetails.Extensions["traceId"] = httpContext.TraceIdentifier;
+                    problemDetails.Extensions["correlationId"] = httpContext.Items["CorrelationId"];
 
                     await httpContext.Response.WriteAsJsonAsync(
                         problemDetails,
@@ -84,11 +89,32 @@ namespace TechChallenge.Api.Middleware
                         : "Ocorreu um erro ao processar a sua requisição. Por favor, entre em contato conosco e comunique o ocorrido."
                 };
                 problem.Extensions["traceId"] = httpContext.TraceIdentifier;
+                problem.Extensions["correlationId"] = httpContext.Items["CorrelationId"];
 
                 await httpContext.Response.WriteAsJsonAsync(
                     problem,
                     httpContext.RequestAborted);
             }
+        }
+
+        private static void RegistrarFalha(HttpContext httpContext, Exception ex, int statusCode)
+        {
+            var path = httpContext.Request.Path;
+            var area = path.StartsWithSegments("/api/v1/ordens-servico") ? "ordens-servico"
+                : path.StartsWithSegments("/api/v1/integracoes") || path.StartsWithSegments("/orcamentos") ? "integracoes"
+                : "outros";
+
+            // A exceção é tratada aqui, então a instrumentação HTTP não a vê: registra no span atual.
+            var activity = Activity.Current;
+            activity?.AddException(ex);
+            if (statusCode >= StatusCodes.Status500InternalServerError)
+                activity?.SetStatus(ActivityStatusCode.Error, ex.GetType().Name);
+
+            TechChallengeMetrics.FalhasProcessamento.Add(
+                1,
+                new KeyValuePair<string, object?>("area", area),
+                new KeyValuePair<string, object?>("tipo", ex.GetType().Name),
+                new KeyValuePair<string, object?>("status_code", statusCode));
         }
 
         private static string GetTitle(int statusCode) => statusCode switch
