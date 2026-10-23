@@ -1,151 +1,137 @@
-# Tech Challenge - Oficina Mecânica - Fase 2
+# Tech Challenge Fase 3 — Aplicação Principal (Kubernetes)
 
-API desenvolvida para a **Pós-Tech FIAP**, evoluindo o projeto da Fase 1. O
-sistema administra clientes, veículos, serviços, produtos, estoque e todo o
-ciclo de vida das Ordens de Serviço (OS).
+Repositório **4 de 4** da Fase 3 da Pós-Tech FIAP. Contém a API REST da oficina
+mecânica, executada em AWS EKS atrás de um API Gateway, com autenticação
+emitida por uma Function Serverless e persistência em PostgreSQL gerenciado.
 
-A Fase 2 concentra-se em evolução da arquitetura, APIs operacionais, controle de
-estoque, testes automatizados, conteinerização, Kubernetes, Terraform e CI/CD.
+Os quatro repositórios da Fase 3:
 
-## Entregáveis da Fase 2
+| # | Repositório | Responsabilidade |
+| --- | --- | --- |
+| 1 | Lambda (Function Serverless) | Validação de CPF e emissão de JWT RS256 |
+| 2 | Infraestrutura Kubernetes (Terraform) | Cluster EKS, Metrics Server, RBAC, ECR, OIDC |
+| 3 | Infraestrutura do Banco Gerenciado (Terraform) | PostgreSQL (RDS/Aurora), VPC, Security Groups |
+| 4 | **Aplicação principal executando em Kubernetes** (este) | API .NET, imagem Docker, manifests, CI/CD |
 
-| Área | Estado verificado |
-| --- | --- |
-| Arquitetura em camadas e testes | Concluído para o escopo da fase |
-| Clean Code | Concluído: fluxo assíncrono propagado dos endpoints aos repositórios |
-| APIs obrigatórias da OS | Concluído, incluindo webhook e e-mail local |
-| Estoque e categorias | Concluído |
-| Docker e Docker Compose | Concluído e validado |
-| Kubernetes local | Concluído e validado |
-| Terraform local | Concluído e validado sobre cluster Docker Desktop existente |
-| CI: build, testes, imagem e promoção da tag | Concluído |
-| CD para o cluster local | Concluído: Terraform e aplicação por Kustomize validados |
-| Vídeo e documento final | [Vídeo publicado](https://youtu.be/EOGnetwuzPE?si=w7ww-NdiRvKyG6Y5) e PDF final gerado e revisado |
+## Propósito
 
-No ambiente acadêmico adotado pelo grupo, o GitHub Actions publica a imagem
-validada no GHCR e versiona sua tag no overlay Kubernetes. A aplicação do
-manifesto continua sendo executada no cluster local do Docker Desktop com
-Terraform e Kustomize. Não existe ambiente remoto de deploy. A decisão externa
-do orçamento é recebida por webhook autenticado e
-idempotente. As mudanças de status são persistidas em uma outbox e enviadas por
-SMTP; no ambiente acadêmico, o Mailpit recebe e exibe os e-mails sem exigir
-infraestrutura externa. A entrega foi concluída com a publicação do vídeo, a
-inclusão dos links e a geração e revisão do PDF final.
+Este repositório entrega:
 
-## Funcionalidades principais
+- a imagem Docker da API publicada no Amazon ECR;
+- os manifests Kustomize (`k8s/base` + `k8s/overlays/aws-eks`) que descrevem o
+  Deployment, Service ClusterIP, ServiceAccount, PDB, HPA e ConfigMap;
+- a pipeline GitHub Actions que, a cada push em `homologacao` ou `main`,
+  valida, publica a imagem no ECR e aplica os manifests no cluster EKS
+  correspondente;
+- a aplicação configurada como **OAuth 2.0 Resource Server**, validando apenas
+  tokens RS256 emitidos pela Function Serverless (OIDC discovery/JWKS).
 
-- cadastro de clientes, veículos, funcionários, serviços e produtos;
-- categorias de produto, serviço e veículo;
-- autenticação JWT, refresh token e autorização por perfil;
-- abertura da OS com cliente, veículo, serviços e produtos;
-- diagnóstico, orçamento, aprovação, execução, finalização e entrega;
-- aprovação ou recusa externa com API key, correlação e idempotência;
-- notificação de mudanças de status por e-mail com outbox, retentativa, resumo
-  do orçamento e botões assinados para aprovação ou recusa;
-- consulta exclusiva de status e acompanhamento público da OS;
-- fila operacional priorizada por estado e data;
-- entrada, consulta e baixa de estoque sem permitir saldo negativo;
-- concorrência otimista nas alterações de estoque;
-- cálculo do tempo médio de execução das Ordens de Serviço.
+A terminação TLS, o roteamento público e o rate limit ficam no API Gateway. A
+aplicação só é alcançada por integração privada (VPC Link) na porta 8080.
 
-Fluxo principal da OS:
-
-```text
-Recebida -> Em diagnóstico -> Aguardando aprovação -> Em execução -> Finalizada -> Entregue
-```
-
-## Arquitetura
-
-O projeto utiliza um monólito organizado em camadas, com o domínio isolado dos
-detalhes de API, autenticação e persistência.
+## Arquitetura específica deste repositório
 
 ```mermaid
 flowchart LR
-    Client[Cliente ou sistema consumidor] --> API[ASP.NET Core API]
-    API --> Application[Casos de uso]
-    Application --> Domain[Domínio]
-    Application --> Contracts[Abstrações]
-    Infrastructure[Persistência, autenticação e notificações] --> Contracts
-    Infrastructure --> Database[(PostgreSQL)]
-    Infrastructure --> Mailpit[SMTP / Mailpit local]
+    Dev[Desenvolvedor] -->|push main / homologacao| GH[GitHub]
+    GH --> CI[GitHub Actions<br/>deploy.yml]
+    CI -->|OIDC AssumeRole| AWS[(AWS IAM)]
+    CI -->|build e push| ECR[(Amazon ECR<br/>techchallenge-application:SHA)]
+    CI -->|kubectl apply -k| EKS[(Amazon EKS<br/>namespace techchallenge)]
+
+    subgraph EKS[AWS EKS - namespace techchallenge]
+        direction TB
+        Deploy[Deployment<br/>techchallenge-api<br/>HPA 2-10 réplicas]
+        SA[ServiceAccount]
+        SVC[Service ClusterIP :8080]
+        PDB[PodDisruptionBudget<br/>minAvailable 1]
+        CM[ConfigMap<br/>techchallenge-api-config]
+        SEC[Secret<br/>techchallenge-api-secrets]
+        Deploy --> SVC
+        Deploy --> SA
+        Deploy --> CM
+        Deploy --> SEC
+        PDB --> Deploy
+    end
+
+    APIGW[API Gateway] -->|VPC Link| SVC
+    Deploy --> RDS[(PostgreSQL<br/>RDS gerenciado)]
+    Deploy -.OIDC JWKS.-> LAMBDA[Function Serverless<br/>emissor JWT RS256]
 ```
 
-### Fluxo de entrega local
+Fluxo de rollout:
 
 ```mermaid
-flowchart LR
-    Actions[GitHub Actions] -->|publica| GHCR[GHCR]
-    Actions -->|promove a tag| Overlay[Overlay Kustomize]
-    Terraform[Terraform] -->|cria| Dependencies[Namespace, Secrets, PostgreSQL e Metrics Server]
-    Overlay -->|kubectl apply local| Kubernetes[Deployment, Service, ConfigMap e HPA]
-    GHCR --> Kubernetes
-    Dependencies --> Kubernetes
+sequenceDiagram
+    participant Dev as Desenvolvedor
+    participant GH as GitHub Actions
+    participant ECR as Amazon ECR
+    participant EKS as EKS techchallenge-api
+
+    Dev->>GH: push em main ou homologacao
+    GH->>GH: restore, build, unit + integration tests
+    GH->>GH: kustomize build k8s/base e overlay
+    GH->>GH: AssumeRole via OIDC
+    GH->>ECR: docker build e push :SHA
+    GH->>EKS: kustomize edit set image + kubectl apply -k
+    EKS->>EKS: pod novo com startupProbe (migrations + seed)
+    EKS->>EKS: readinessProbe libera tráfego
+    GH->>EKS: rollout status --timeout 300s
 ```
 
-| Projeto | Responsabilidade |
+## Tecnologias
+
+| Camada | Tecnologia |
 | --- | --- |
-| `TechChallenge.Api` | Endpoints, contratos HTTP, Swagger, saúde e middleware |
-| `TechChallenge.Application` | Casos de uso, comandos e validações |
-| `TechChallenge.Application.Abstractions` | Interfaces e portas da aplicação |
-| `TechChallenge.Domain` | Entidades, estados e regras de negócio |
-| `TechChallenge.Infrastructure.*` | PostgreSQL, EF Core, autenticação, SMTP/outbox e injeção de dependências |
-| `TechChallenge.Tests` | Testes unitários |
-| `TechChallenge.IntegrationTests` | Testes de integração HTTP |
-
-Tecnologias principais: **.NET 10**, ASP.NET Core Minimal APIs, Entity Framework
-Core, PostgreSQL, JWT, FluentValidation, xUnit, Docker, Kubernetes, Terraform e
-GitHub Actions.
-
-A arquitetura completa, os recursos provisionados e o fluxo de deploy estão em
-[Arquitetura da Fase 2](docs/arquitetura-fase-2.md).
+| API | .NET 10, ASP.NET Core Minimal APIs, FluentValidation, Swashbuckle/OpenAPI |
+| Persistência | Entity Framework Core 10, Npgsql, PostgreSQL |
+| Autenticação | JWT Bearer RS256 (resource server), OIDC discovery/JWKS |
+| Build | Docker multi-stage, usuário não-root (UID 1654) |
+| Orquestração | Kubernetes 1.30, Kustomize 5.4 |
+| Nuvem | AWS EKS, ECR, IAM OIDC |
+| CI/CD | GitHub Actions, aws-actions/configure-aws-credentials, OIDC |
+| Qualidade | xUnit (unit + integration), kubeconform |
 
 ## APIs
 
-Todas as rotas usam o prefixo `/api/v1`. A especificação completa fica disponível
-pelo Swagger quando a aplicação está em execução:
+Prefixo: `/api/v1`. Swagger UI disponível em `/swagger` quando a aplicação
+está em execução. Documento OpenAPI JSON em `/openapi/v1.json`.
 
-- local: [http://localhost:5020/swagger](http://localhost:5020/swagger);
-- Docker: [http://localhost:8080/swagger](http://localhost:8080/swagger);
-- Kubernetes por port-forward: [http://localhost:18080/swagger](http://localhost:18080/swagger);
-- OpenAPI JSON: `/openapi/v1.json`.
+- Local: [http://localhost:5020/swagger](http://localhost:5020/swagger)
+- Docker Compose: [http://localhost:8080/swagger](http://localhost:8080/swagger)
+- Kubernetes via `kubectl port-forward`: [http://localhost:18080/swagger](http://localhost:18080/swagger)
+- Produção: `https://<api-gateway>/swagger` (URL definida pelo repositório do
+  API Gateway)
 
-Rotas centrais da Fase 2:
+Rotas centrais:
 
 | Método | Rota | Finalidade |
 | --- | --- | --- |
 | `POST` | `/api/v1/ordens-servico` | Abrir OS com cliente, veículo, serviços e produtos |
 | `GET` | `/api/v1/ordens-servico/{id}/status` | Consultar o status da OS |
-| `GET` | `/api/v1/ordens-servico/oficina` | Consultar a fila operacional priorizada |
-| `GET` | `/api/v1/ordens-servico/acompanhamento/{codigo}` | Acompanhamento público da OS |
-| `POST` | `/api/v1/integracoes/orcamentos/respostas` | Receber aprovação ou recusa externa idempotente |
+| `GET` | `/api/v1/ordens-servico/oficina` | Fila operacional priorizada |
+| `GET` | `/api/v1/ordens-servico/acompanhamento/{codigo}` | Acompanhamento público |
+| `POST` | `/api/v1/integracoes/orcamentos/respostas` | Webhook de aprovação/recusa externa |
 | `POST` | `/api/v1/estoque` | Adicionar quantidade ao estoque |
 | `GET` | `/api/v1/estoque/{produtoId}` | Consultar saldo por produto |
 | `PUT` | `/api/v1/estoque` | Efetuar baixa no estoque |
+| `GET` | `/health/live` | Liveness probe (Kubernetes) |
+| `GET` | `/health/ready` | Readiness probe (Kubernetes) |
 
-Os CRUDs de clientes, veículos, funcionários, serviços, produtos, categorias e
-usuários estão documentados no Swagger. Por padrão, as rotas exigem autenticação;
-login, refresh, OpenAPI, saúde e acompanhamento público são exceções explícitas.
-O webhook externo não usa o JWT interno: ele exige o cabeçalho
-`X-Integration-Key`.
+Autenticação: em Production a API valida apenas JWT RS256 do emissor configurado
+em `Jwt__Authority`. O webhook externo usa o cabeçalho `X-Integration-Key` (API
+key independente, não é JWT).
 
-## Execução local
+## Execução local (desenvolvimento)
 
-### Pré-requisitos
-
-- .NET SDK 10;
-- PostgreSQL;
-- Git;
-- Docker Desktop para execução conteinerizada e Kubernetes local.
-
-Clone e acesse o projeto:
+Pré-requisitos: .NET SDK 10, PostgreSQL, Git, Docker Desktop (opcional).
 
 ```bash
-git clone https://github.com/louistx/fiap-tech-challenge.git
-cd fiap-tech-challenge
+git clone https://github.com/tech-challenge-SOAT16/tech-challenge-application.git
+cd tech-challenge-application
 ```
 
-Configure conexão, JWT e senha do usuário inicial por User Secrets ou variáveis
-de ambiente. Exemplo para o terminal local:
+Configure as variáveis mínimas (via user-secrets ou variáveis de ambiente):
 
 ```bash
 export ConnectionStrings__DefaultConnection="Host=localhost;Port=5432;Database=TechChallenge;Username=postgres;Password=SUA_SENHA"
@@ -155,7 +141,11 @@ export ApprovalLinks__SigningKey="chave-independente-com-32-caracteres"
 export Seed__AdminPassword="SenhaAdmin123"
 ```
 
-Depois, restaure, compile e execute:
+`Jwt__EnableLocalIssuance=true` só é aceito fora de `Production`; a aplicação
+emite HS256 nesse modo para facilitar testes locais. Em Production, a emissão
+local é bloqueada e apenas RS256 externo é aceito.
+
+Compile e execute:
 
 ```bash
 dotnet restore TechChallenge.slnx
@@ -163,12 +153,13 @@ dotnet build TechChallenge.slnx --no-restore
 dotnet run --project src/TechChallenge.Api/TechChallenge.Api.csproj
 ```
 
-A API será exposta em `http://localhost:5020`. As migrations são aplicadas na
-inicialização, exceto no ambiente `Testing`.
+A API sobe em `http://localhost:5020`. Migrations e seed são aplicados no
+startup, protegidos por `pg_advisory_lock` para suportar deploy com múltiplas
+réplicas sem race.
 
-## Docker
+### Docker Compose local
 
-Suba a API, o PostgreSQL e o Mailpit:
+Útil para testar a imagem antes do push:
 
 ```bash
 docker compose \
@@ -177,129 +168,136 @@ docker compose \
   up --build
 ```
 
-A API ficará em `http://localhost:8080`, o Mailpit em
-`http://localhost:8025` e o PostgreSQL em `localhost:5432`. A coleção de
-requisições pronta para apresentação está em
-[docs/demo/fase-2](docs/demo/fase-2/README.md).
+Expõe API em `http://localhost:8080`, Mailpit em `http://localhost:8025`,
+PostgreSQL em `localhost:5432`.
 
-Para encerrar:
+## Deploy em Kubernetes (AWS EKS)
+
+### Fluxo automático (CI/CD)
+
+`.github/workflows/deploy.yml`:
+
+| Branch | GitHub Environment | Alvo |
+| --- | --- | --- |
+| `homologacao` | `homologacao` | Cluster/Role/ECR de homologação |
+| `main` | `production` | Cluster/Role/ECR de produção |
+
+Cada ambiente carrega seus próprios secrets/variables:
+
+| Nome | Tipo | Exemplo |
+| --- | --- | --- |
+| `AWS_ROLE_ARN` | Secret | `arn:aws:iam::123456789012:role/gh-actions-techchallenge-deploy` |
+| `AWS_REGION` | Variable | `us-east-1` |
+| `EKS_CLUSTER_NAME` | Variable | `techchallenge-eks` ou `techchallenge-eks-hml` |
+
+Etapas do workflow:
+
+1. `validate`: restore, build Release, testes unitários e de integração,
+   render de `kustomize build k8s/base` e `kustomize build k8s/overlays/aws-eks`.
+2. `deploy` (só após `validate` verde): AssumeRole via OIDC, login no ECR,
+   `docker build` + push com tag imutável `${SHA::12}` e também `latest`,
+   `aws eks update-kubeconfig`, `kustomize edit set image` com a URI do ECR,
+   `kubectl apply -k`, `kubectl rollout status --timeout=300s`, resumo.
+
+`.github/workflows/manifest-validation.yml` roda em todo PR direcionado a
+`main`/`homologacao` e valida base + overlay com `kubeconform`, sem exigir
+credencial da AWS.
+
+### Deploy manual
 
 ```bash
-docker compose \
-  -f docker-compose/docker-compose.yml \
-  -f docker-compose/docker-compose.override.yml \
-  down
+aws eks update-kubeconfig --name <cluster> --region <region>
+kubectl kustomize k8s/overlays/aws-eks   # inspeção
+kubectl apply -k k8s/overlays/aws-eks
+kubectl -n techchallenge rollout status deployment/techchallenge-api --timeout=300s
+kubectl -n techchallenge get deploy,pod,svc,hpa,pdb
 ```
 
-O Dockerfile usa múltiplos estágios e usuário não-root. O workflow publica a
-imagem para `linux/amd64`, com `latest`, uma tag formada pelos 12 primeiros
-caracteres do SHA e o SHA completo no rótulo OCI. Após a publicação, o workflow
-atualiza automaticamente a tag imutável do overlay Kubernetes. No Docker Desktop
-em Apple Silicon, essa imagem é executada por emulação.
+### Pré-requisitos de infraestrutura
+
+Este repositório **não** cria o cluster, a Role IAM, o ECR, o namespace nem o
+Secret. Esses recursos são provisionados pelos outros três repositórios da
+Fase 3. Antes de disparar o pipeline, é preciso ter:
+
+- cluster EKS acessível pela Role do GitHub Actions (OIDC trust) com permissão
+  `eks:DescribeCluster`;
+- repositório ECR `techchallenge-application` com permissão de push para a
+  Role do pipeline e pull para os nós/Fargate do cluster;
+- namespace `techchallenge` criado;
+- Metrics Server instalado (necessário para o HPA);
+- Secret Kubernetes `techchallenge-api-secrets` no namespace, com as chaves:
+  - `ConnectionStrings__DefaultConnection` (TLS para o RDS);
+  - `ApprovalLinks__SigningKey` (≥ 32 caracteres, independente do JWT);
+  - `IntegracaoExterna__ApiKey` (webhook externo);
+  - `Seed__AdminPassword` (seed administrativo);
+  - `Smtp__Host`, `Smtp__Port`, `Smtp__Username`, `Smtp__Password`.
+
+Nenhuma chave privada RSA entra neste repositório. A API busca somente as
+chaves públicas via OIDC/JWKS do emissor configurado em `Jwt__Authority`.
+
+## Segurança
+
+- Imagem Docker multi-stage, usuário não-root (`runAsUser: 1654`);
+- `readOnlyRootFilesystem: true`, `/tmp` em `emptyDir`;
+- `capabilities.drop: [ALL]`, `seccompProfile: RuntimeDefault`,
+  `allowPrivilegeEscalation: false`;
+- `automountServiceAccountToken: false`;
+- validação JWT restrita a RS256 em Production; HS256 bloqueado;
+- segredos consumidos por `envFrom.secretRef`, sem versionamento no Git;
+- respostas de erro padronizadas pelo `ExceptionMiddleware`.
+
+## Alta disponibilidade e escalabilidade
+
+- HPA 2 a 10 réplicas, com alvo de 70% CPU e 80% memória;
+- PodDisruptionBudget `minAvailable: 1` protege drains de nó;
+- `topologySpreadConstraints` distribui réplicas por AZ e por nó
+  (`ScheduleAnyway` para não bloquear clusters pequenos);
+- RollingUpdate com `maxUnavailable: 0`, `maxSurge: 1`;
+- `terminationGracePeriodSeconds: 60` para encerrar requisições em voo;
+- startup, readiness e liveness probes em `/health/live` e `/health/ready`;
+- advisory lock PostgreSQL (`pg_advisory_lock(727292024)`) serializa migrations
+  e seed quando o HPA inicia com 2+ réplicas simultâneas.
+
+## Estrutura do repositório
+
+```text
+src/
+├── TechChallenge.Api/                       # Minimal APIs + Dockerfile
+├── TechChallenge.Application/               # casos de uso
+├── TechChallenge.Application.Abstractions/  # portas
+├── TechChallenge.Domain/                    # entidades e regras
+├── TechChallenge.Infrastructure.Auth/       # JWT RS256/HS256 e policies
+├── TechChallenge.Infrastructure.Database/   # EF Core, migrations, seed
+├── TechChallenge.Infrastructure.IoC/        # composição de dependências
+└── TechChallenge.Infrastructure.Notifications/
+tests/
+├── TechChallenge.Tests/                     # xUnit (unitários)
+└── TechChallenge.IntegrationTests/          # xUnit (integração HTTP)
+k8s/
+├── base/
+│   └── api/{serviceaccount,configmap,deployment,service,pdb,kustomization}.yaml
+└── overlays/
+    └── aws-eks/{configmap-patch,hpa,kustomization}.yaml
+.github/workflows/
+├── deploy.yml               # Deploy main/homologacao -> EKS
+├── manifest-validation.yml  # kustomize build + kubeconform em PR
+├── build.yml
+├── unit-tests.yml
+├── integration-tests.yml
+└── discord-notifications.yml
+```
+
+Detalhes dos manifests e do contrato do Secret: [k8s/README.md](k8s/README.md).
 
 ## Testes
 
 ```bash
 dotnet test tests/TechChallenge.Tests/TechChallenge.Tests.csproj
 dotnet test tests/TechChallenge.IntegrationTests/TechChallenge.IntegrationTests.csproj
-terraform -chdir=infra/environments/local test
 ```
 
-Última validação registrada:
-
-- 123 testes unitários aprovados;
-- 31 testes de integração aprovados;
-- 4 testes Terraform aprovados;
-- build sem erros ou avisos;
-- imagem Docker `linux/amd64` publicada e validada localmente.
-
-Estratégia, cenários e limitações: [docs/testes.md](docs/testes.md).
-
-## Kubernetes e Terraform
-
-O cluster Kubernetes é fornecido pelo Docker Desktop. O Terraform não cria o
-cluster; ele administra o namespace `techchallenge`, PostgreSQL, Service interno,
-PVC, Secrets e Metrics Server. O Kustomize administra ConfigMap, Deployment,
-Service e HPA da API.
-
-Prepare e aplique a fundação local. O ambiente é fixo para o Docker Desktop e
-não exige `terraform.tfvars`:
-
-```bash
-terraform -chdir=infra/environments/local init
-terraform -chdir=infra/environments/local fmt -check -recursive
-terraform -chdir=infra/environments/local validate
-terraform -chdir=infra/environments/local test
-terraform -chdir=infra/environments/local apply
-```
-
-Implante a aplicação com um único apply do overlay:
-
-```bash
-kubectl --context=docker-desktop apply -k k8s/overlays/docker-local
-kubectl --context=docker-desktop -n techchallenge rollout status \
-  deployment/fiap-tech-challenge-api --timeout=300s
-kubectl --context=docker-desktop -n techchallenge get pods,svc,pvc,hpa
-```
-
-O HPA controla a API entre uma e três réplicas, com alvo de 70% de CPU. Os
-endpoints `/health/live` e `/health/ready` são utilizados pelas probes.
-
-O Job de carga é iniciado separadamente durante a demonstração:
-
-```bash
-kubectl --context=docker-desktop apply -f k8s/tests/hpa-load.yaml
-```
-
-Instruções de credenciais, persistência e teste de carga:
-[infra/README.md](infra/README.md) e [k8s/README.md](k8s/README.md).
-
-## CI/CD
-
-| Workflow | Responsabilidade |
-| --- | --- |
-| `build.yml` | Restore e build |
-| `unit-tests.yml` | Testes unitários |
-| `integration-tests.yml` | Testes de integração |
-| `docker-image.yml` | Gate de build/testes, publicação no GHCR e promoção da tag no overlay Kubernetes |
-
-O workflow da imagem só publica depois que build e as duas suítes são aprovados.
-A publicação bem-sucedida atualiza `k8s/overlays/docker-local/kustomization.yaml`
-em um commit automático. Esse commit usa o `GITHUB_TOKEN`, altera somente o
-overlay e não dispara uma nova execução da pipeline.
-A entrega contínua do ambiente acadêmico é concluída no cluster Kubernetes local:
-o Terraform prepara banco e dependências, e um único `kubectl apply -k` aplica a
-API com a imagem publicada. O runner hospedado não precisa acessar a máquina do
-desenvolvedor, pois não existe um ambiente remoto neste trabalho.
-
-## Segurança
-
-- JWT Bearer e refresh token com rotação e revogação;
-- hash de senha com PBKDF2;
-- perfis `Administrador`, `Vendedor` e `Mecanico`;
-- autenticação obrigatória por padrão;
-- usuário não-root no container;
-- segredos gerados pelo Terraform e fora do Git;
-- respostas de erro padronizadas;
-- relatório de vulnerabilidades em [docs/relatorio-vulnerabilidades.md](docs/relatorio-vulnerabilidades.md).
-
-## Documentação e entrega
-
-| Documento | Conteúdo |
-| --- | --- |
-| [Checklist da Fase 2](docs/fase-2-entregaveis.md) | Progresso, evidências e pendências |
-| [Arquitetura da Fase 2](docs/arquitetura-fase-2.md) | Componentes, infraestrutura e deploy |
-| [Validação da infraestrutura](docs/validacao-infra-local.md) | Evidências de Terraform, Kubernetes, saúde, persistência e HPA |
-| [Auditoria do Estoque](docs/auditoria-estoque.md) | Contratos, regras, persistência e testes |
-| [DDD](docs/ddd.md) | Domínio e agregado de Ordem de Serviço |
-| [Event Storming](docs/event-storming.md) | Eventos, comandos e fluxos do negócio |
-| [Roteiro do vídeo](docs/roteiro-video-fase-2.md) | Demonstração cronometrada de até 15 minutos |
-| [Demo executável](docs/demo/fase-2/README.md) | Requests HTTP do fluxo, webhook e Mailpit |
-| [Documento final](docs/entrega-fase-2.md) | Fonte da entrega no portal |
-
-O [vídeo demonstrativo](https://youtu.be/EOGnetwuzPE?si=w7ww-NdiRvKyG6Y5) foi
-publicado e o PDF final foi gerado e revisado para a entrega no portal. O
-repositório está compartilhado com `soat-architecture` com permissão de escrita.
+As duas suítes também são executadas pelo workflow `deploy.yml` antes de
+qualquer publicação de imagem.
 
 ## Equipe
 
@@ -311,6 +309,4 @@ repositório está compartilhado com `soat-architecture` com permissão de escri
 | Caio Montilha | RM375494 | [@cmontilha](https://github.com/cmontilha) |
 | Gustavo Keiji | RM374965 | [@GuKeiji](https://github.com/GuKeiji) |
 
-Repositório: [github.com/louistx/fiap-tech-challenge](https://github.com/louistx/fiap-tech-challenge)
-
-Projeto acadêmico desenvolvido para o **Tech Challenge da Pós-Tech FIAP**.
+Projeto acadêmico desenvolvido para o **Tech Challenge da Pós-Tech FIAP — Fase 3**.
