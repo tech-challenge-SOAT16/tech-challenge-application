@@ -43,6 +43,16 @@ public static class TechChallengeMetrics
         unit: "{notificacao}",
         description: "Falhas no envio de notificações de status.");
 
+    public static readonly Counter<long> NotificacoesComFalha = Meter.CreateCounter<long>(
+        "techchallenge.notificacoes.com_falha",
+        unit: "{notificacao}",
+        description: "Notificações que falharam na primeira tentativa (cada notificação conta uma vez).");
+
+    public static readonly Counter<long> NotificacoesRecuperadas = Meter.CreateCounter<long>(
+        "techchallenge.notificacoes.recuperadas",
+        unit: "{notificacao}",
+        description: "Notificações entregues após uma ou mais falhas.");
+
     public static readonly Counter<long> DecisoesExternas = Meter.CreateCounter<long>(
         "techchallenge.integracoes.decisoes",
         unit: "{decisao}",

@@ -102,6 +102,8 @@ public class NotificacaoStatusOutboxWorker : BackgroundService
             notificacao.MarcarComoEnviada(DateTime.UtcNow);
             await repository.SalvarAsync(cancellationToken);
             TechChallengeMetrics.NotificacoesEnviadas.Add(1, StatusTag(notificacao));
+            if (notificacao.Tentativas > 0)
+                TechChallengeMetrics.NotificacoesRecuperadas.Add(1, StatusTag(notificacao));
 
             _logger.LogInformation(
                 "Notificação {NotificacaoId} da OS {OrdemServicoId} enviada com sucesso.",
@@ -117,6 +119,8 @@ public class NotificacaoStatusOutboxWorker : BackgroundService
             notificacao.RegistrarFalha(exception.Message, DateTime.UtcNow);
             await repository.SalvarAsync(cancellationToken);
             TechChallengeMetrics.NotificacoesFalhas.Add(1, StatusTag(notificacao));
+            if (notificacao.Tentativas == 1)
+                TechChallengeMetrics.NotificacoesComFalha.Add(1, StatusTag(notificacao));
 
             _logger.LogWarning(
                 exception,
