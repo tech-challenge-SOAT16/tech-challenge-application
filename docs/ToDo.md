@@ -72,7 +72,7 @@ não na AWS.
 - [x] Rotas da oficina exigem perfil de funcionário, inclusive as de leitura; token de cliente recebe 401 nelas.
 - [x] Funcionários continuam com o login da API em produção (chave `Jwt__LocalSigningKey` no Secret).
 - [x] Validado com a Lambda local apontando para o banco da aplicação: login por CPF, OS do próprio cliente e bloqueio das rotas da oficina.
-- [ ] Incluir `Jwt__LocalSigningKey` no Secret gerado pelo `tech-challenge-database` ([PR #1](https://github.com/tech-challenge-SOAT16/tech-challenge-database/pull/1)).
+- [x] `Jwt__LocalSigningKey` incluída no Secret gerado pelo `tech-challenge-database` ([PR #1](https://github.com/tech-challenge-SOAT16/tech-challenge-database/pull/1)).
 
 ### Organização e GitHub
 
