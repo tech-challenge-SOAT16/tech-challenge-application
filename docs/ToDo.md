@@ -9,7 +9,7 @@ não na AWS.
 
 | Repositório | Estado |
 | --- | --- |
-| [tech-challenge-lambda](https://github.com/tech-challenge-SOAT16/tech-challenge-lambda) | Mesclado na `main`; branch padrão ainda é `feature/lambda-auth`; deploy desligado até haver conta AWS |
+| [tech-challenge-lambda](https://github.com/tech-challenge-SOAT16/tech-challenge-lambda) | Na `main`; deploy desligado até haver conta AWS |
 | [tech-challenge-k8s](https://github.com/tech-challenge-SOAT16/tech-challenge-k8s) | [PR #1](https://github.com/tech-challenge-SOAT16/tech-challenge-k8s/pull/1) aguardando revisão |
 | [tech-challenge-database](https://github.com/tech-challenge-SOAT16/tech-challenge-database) | Na `main`; plan e apply desligados até haver conta AWS |
 | tech-challenge-application (este) | [PR #3](https://github.com/tech-challenge-SOAT16/tech-challenge-application/pull/3) aguardando revisão |
@@ -58,7 +58,7 @@ não na AWS.
 ### Este repositório
 
 - [ ] Ajustar o `deploy.yml` para GitOps: publicar no ECR com as chaves do Academy e commitar a tag no overlay do ambiente direto na `main` (`github-actions[bot]`), removendo kubeconfig, `kubectl` e espera de rollout. Isso também elimina o pin `kubectl v1.30.4`, incompatível com o EKS 1.35.
-- [ ] Liberar no ruleset da `main` o bypass para o `github-actions[bot]`, restrito aos commits de tag.
+- [ ] Liberar a exceção do ruleset da `main` para o commit automático da tag. O GitHub não aceita o bot do Actions como exceção em ruleset de repositório desta organização; a alternativa é uma deploy key de escrita usada só pelo `deploy.yml`, com `DeployKey` na lista de bypass do ruleset.
 - [ ] Criar o overlay `k8s/overlays/aws-eks-homolog` (namespace `techchallenge-homolog`, login local e dados de demo ligados).
 - [ ] Adicionar `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.monitoring.svc.cluster.local:4317`, `OTEL_SERVICE_NAME` e `Smtp__Host=mailpit` aos overlays.
 - [ ] Trocar os valores `replace-me` de `Jwt__Authority`, `Jwt__Issuer` e `ApprovalLinks__BaseUrl` pelos outputs reais da Lambda e do Kong.
@@ -72,9 +72,12 @@ não na AWS.
 
 ### Organização e GitHub
 
-- [ ] Trocar a branch padrão do `tech-challenge-lambda` para `main`.
-- [ ] Proteger `main` nos quatro repositórios (PR obrigatório e checks de build e testes).
-- [ ] Adicionar o usuário `soat-architecture` aos quatro repositórios.
+- [x] Branch padrão do `tech-challenge-lambda` trocada para `main`.
+- [x] `main` protegida: PR com 1 aprovação, sem force push nem exclusão e checks obrigatórios (aplicação: testes unitários e de integração; k8s: validação Terraform e render GitOps; banco: validação Terraform). Na Lambda vale a proteção que já existia (PR obrigatório).
+- [x] Descrição nos quatro repositórios e exclusão automática da branch após o merge.
+- [ ] Adicionar o usuário `soat-architecture` aos quatro repositórios (exige um admin; a ação concede acesso a um usuário externo).
+- [ ] Apagar as branches já mescladas `feature/api-gateway-kong` (aplicação) e `feature/lambda-auth` (Lambda); nenhuma tem commits fora da `main`.
+- [ ] Avaliar o repositório privado `demo-repository`, criado automaticamente pelo GitHub e sem relação com o projeto.
 - [ ] Cadastrar o secret `DISCORD_WEBHOOK_URL` para as notificações.
 
 ### Com acesso à AWS
