@@ -8,7 +8,7 @@ OpenTelemetry e Grafana. A infraestrutura fica no repositório
 > Pendências para o roteiro completo: overlay `k8s/overlays/aws-eks-homolog`
 > (namespace `techchallenge-homolog`, login local e dados de demo ligados),
 > `deploy.yml` gravando a tag nos overlays em vez de `kubectl apply` e o
-> repositório `tech-challenge-terraform` (banco e Secret da API).
+> repositório `tech-challenge-database` (banco e Secret da API).
 
 ## 1. Credenciais da AWS no GitHub (uma vez)
 
@@ -58,7 +58,7 @@ do state" pedindo a renovação dos secrets.
 1. No `tech-challenge-k8s`, *Actions → Terraform e GitOps → Run workflow* com
    `apply` (ou merge de um PR em `main`). Cria VPC, EKS, ECR e Argo CD; o Argo CD
    sincroniza Kong, observabilidade, Mailpit e a API.
-2. Banco e Secret da API: pipeline do `tech-challenge-terraform`.
+2. Banco e Secret da API: pipeline do `tech-challenge-database`.
 3. Imagem da API: pipeline desta aplicação publica no ECR e grava a tag nos
    overlays `k8s/overlays/aws-eks-homolog` e `k8s/overlays/aws-eks` da `main`.
 4. Conectar o kubectl e conferir:
