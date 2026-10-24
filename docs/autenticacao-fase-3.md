@@ -1,120 +1,97 @@
-# Autenticação — contrato da Fase 3
+# Autenticação — Fase 3
 
-## Responsabilidades
+A API aceita dois tipos de token, cada um em um esquema separado. Um token
+nunca vale nas rotas do outro tipo.
 
-A **Function Serverless** é o único emissor de access tokens em produção. Ela
-valida credenciais, gera o JWT e o assina com uma chave privada RSA. A aplicação
-principal no EKS funciona como **OAuth 2.0 Resource Server**: recebe o bearer
-token, obtém chaves públicas por OIDC discovery/JWKS e autoriza as operações.
+| Quem | Como obtém o token | Esquema na API | Onde vale |
+| --- | --- | --- | --- |
+| Cliente | Login por CPF na Function Serverless ([tech-challenge-lambda](https://github.com/tech-challenge-SOAT16/tech-challenge-lambda)) | `Customer` (RS256, chave pública via JWKS) | Somente `/api/v1/cliente/**` |
+| Funcionário | `POST /api/v1/auth/login` da própria API | `Bearer` (HS256, chave no Secret) | Rotas de funcionário, conforme o perfil |
 
-A chave privada RSA nunca é entregue à aplicação, incluída em imagem, ConfigMap,
-Secret Kubernetes ou variável do GitHub Actions. Ela pertence ao repositório da
-Function e deve ser protegida por AWS KMS ou AWS Secrets Manager.
+```mermaid
+sequenceDiagram
+    participant C as Cliente
+    participant L as Lambda (API Gateway)
+    participant DB as RDS (auth_clients)
+    participant K as Kong
+    participant A as API
 
-## Discovery e JWKS
-
-O emissor deve publicar os endpoints HTTPS padrão:
-
-```text
-GET {authority}/.well-known/openid-configuration
-GET {jwks_uri}
+    C->>L: POST /auth/login {cpf}
+    L->>DB: busca cliente ativo por CPF
+    L-->>C: 202 challenge_id (código enviado por e-mail)
+    C->>L: POST /auth/verify {challenge_id, code}
+    L-->>C: access_token RS256 (sub = Id do cliente, scope = customer)
+    C->>K: GET /api/v1/cliente/ordens-servico (Bearer)
+    K->>A: encaminha
+    A->>L: GET /.well-known/openid-configuration e JWKS (cache)
+    A-->>C: somente as OS do próprio cliente
 ```
 
-O documento de discovery deve conter, no mínimo:
+## Cliente (token da Function)
 
-```json
-{
-  "issuer": "https://<api-id>.execute-api.<region>.amazonaws.com/auth",
-  "jwks_uri": "https://<api-id>.execute-api.<region>.amazonaws.com/auth/.well-known/jwks.json",
-  "id_token_signing_alg_values_supported": ["RS256"]
-}
-```
+A Function valida o CPF, consulta a view `auth_clients` (criada pelo
+[tech-challenge-database](https://github.com/tech-challenge-SOAT16/tech-challenge-database)
+sobre a tabela `Cliente`) e emite o JWT. Claims usadas pela API:
 
-O JWKS contém apenas chaves públicas. Cada JWT deve possuir `kid`; esse valor
-seleciona a chave correspondente e permite rotação sem indisponibilidade. Durante
-a rotação, a Function deve publicar simultaneamente a chave atual e a anterior
-até todos os tokens antigos expirarem.
+| Claim | Valor |
+| --- | --- |
+| `iss` | URL do API Gateway da Function (output `issuer` do Terraform da Lambda) |
+| `aud` | `tech-challenge-api` |
+| `sub` | `Cliente.Id` |
+| `scope` | `customer` |
+| `exp`, `iat`, `nbf`, `jti` | padrão, 15 minutos de validade |
 
-## Contrato do access token
+A política `Cliente` exige o esquema `Customer` e `scope=customer`. O `sub`
+filtra os dados: o cliente só lista e consulta as próprias OS, e uma OS de outro
+cliente responde 404.
 
-Algoritmo permitido em produção: **RS256**.
-
-Header mínimo:
-
-```json
-{
-  "alg": "RS256",
-  "typ": "JWT",
-  "kid": "<id-da-chave>"
-}
-```
-
-Claims esperadas:
-
-| Claim | Obrigatória | Contrato |
+| Método | Rota | Resultado |
 | --- | --- | --- |
-| `iss` | Sim | Exatamente igual a `Jwt__Issuer` e ao `issuer` do discovery |
-| `aud` | Sim | `techchallenge-api` (confirmar antes da integração final) |
-| `sub` | Sim | GUID do usuário existente na aplicação |
-| `name` | Sim | Login/nome exibível |
-| `role` | Sim | `Administrador`, `Vendedor` ou `Mecanico` |
-| `funcionarioId` | Não | GUID do funcionário vinculado |
-| `jti` | Sim | Identificador único do token |
-| `iat` | Sim | Instante de emissão |
-| `nbf` | Recomendado | Início da validade |
-| `exp` | Sim | Expiração curta do access token |
+| `GET` | `/api/v1/cliente/ordens-servico` | OS do cliente autenticado |
+| `GET` | `/api/v1/cliente/ordens-servico/{id}` | Detalhe da OS, se pertencer ao cliente |
 
-A API mantém `MapInboundClaims=false`; portanto os nomes devem ser enviados
-exatamente como definidos. As policies existentes utilizam a claim `role`.
-
-## Configuração da aplicação
-
-Produção/EKS:
+Configuração (sem segredos, no ConfigMap):
 
 ```text
-Jwt__Authority=https://<api-id>.execute-api.<region>.amazonaws.com/auth
-Jwt__Issuer=https://<api-id>.execute-api.<region>.amazonaws.com/auth
-Jwt__Audience=techchallenge-api
-Jwt__RequireHttpsMetadata=true
-Jwt__EnableLocalIssuance=false
+CustomerAuth__Enabled=true
+CustomerAuth__Authority=<issuer da Lambda>
+CustomerAuth__Issuer=<issuer da Lambda>
+CustomerAuth__Audience=tech-challenge-api
+CustomerAuth__RequireHttpsMetadata=true
 ```
 
-Se o discovery não estiver em `{Authority}/.well-known/openid-configuration`,
-configure também `Jwt__MetadataAddress` com a URL HTTPS completa. A aplicação
-aceita somente RS256 no modo externo e atualiza o metadata/JWKS quando recebe um
-`kid` desconhecido.
+A API aceita somente RS256 nesse esquema e busca a chave pública pelo
+discovery/JWKS, renovando o cache quando recebe um `kid` desconhecido. Sem
+`CustomerAuth__Enabled=true`, as rotas da área do cliente não são registradas.
 
-Discovery, JWKS e chaves públicas não são segredos. Os pods precisam de saída
-HTTPS e resolução DNS para acessar esses endpoints.
+## Funcionário (login da API)
 
-## Compatibilidade temporária local
-
-Desenvolvimento e testes podem habilitar explicitamente o emissor legado:
+Funcionários (`Administrador`, `Vendedor`, `Mecanico`) usam o login, refresh,
+logout e troca de senha da própria API, também em produção. O token é HS256
+com a chave `Jwt__LocalSigningKey`, que vem do Secret `techchallenge-api-secrets`
+(gerado pelo `tech-challenge-database`) e nunca fica no Git.
 
 ```text
 Jwt__EnableLocalIssuance=true
-Jwt__LocalSigningKey=<chave local com pelo menos 32 caracteres>
+Jwt__Issuer=techchallenge-api
+Jwt__Audience=techchallenge-funcionarios
+Jwt__LocalSigningKey=<Secret, pelo menos 32 caracteres>
 ```
 
-Esse modo aceita somente HS256 e registra as rotas locais de login, refresh,
-logout, troca de senha e gestão de refresh tokens. A inicialização bloqueia
-`EnableLocalIssuance=true` em `Production`. No modo externo, somente `/api/v1/auth/me`
-permanece registrado neste grupo; login e ciclo de credenciais pertencem à
-Function Serverless.
+Todas as rotas sem política própria exigem um funcionário autenticado **com
+perfil**, inclusive as de leitura (`GET /clientes`, `/veiculos`, `/produtos`
+etc.). Um token de cliente nessas rotas recebe 401.
+
+O esquema de funcionários ainda aceita um emissor externo RS256
+(`Jwt__EnableLocalIssuance=false` com `Jwt__Authority`), para o caso de o login
+de funcionários migrar para a Function no futuro.
 
 ## Assinatura dos links de orçamento
 
-Os links de aprovação/recusa não são JWT bearer. Eles continuam usando HMAC com
-uma chave independente:
+Os links de aprovação e recusa enviados por e-mail não são JWT bearer. Eles usam
+HMAC com a chave independente `ApprovalLinks__SigningKey`, também no Secret.
 
-```text
-ApprovalLinks__SigningKey=<chave com pelo menos 32 caracteres>
-```
-
-Essa chave fica no Secret `techchallenge-api-secrets`. Ela não deve ser derivada,
-reutilizada ou rotacionada junto com a chave privada RSA da Function.
-
-## Pendências de integração
+## Decisão
 
 Antes de habilitar o ambiente de produção, confirmar com o repositório da
 Function Serverless:
@@ -129,3 +106,8 @@ Function Serverless:
 - base de persistência dos usuários (compartilhada com a API ou própria da
   Function) e estratégia de revogação de tokens (lista negra, `jti` curto,
   rotação de `kid`).
+A Function emite apenas tokens de cliente (`scope=customer`, sem perfil). Para
+que funcionários continuem operando a oficina na nuvem, o login deles permanece
+na API, e os dois tipos de token ficam em esquemas separados. Assim, um cliente
+autenticado por CPF não alcança dados de outros clientes nem as rotas da
+oficina.

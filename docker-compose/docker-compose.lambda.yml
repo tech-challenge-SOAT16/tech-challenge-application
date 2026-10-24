@@ -1,0 +1,65 @@
+# Demo local com a Function de autenticação por CPF (tech-challenge-lambda).
+# Uso: adicione "-f docker-compose/docker-compose.lambda.yml" ao comando do compose.
+# - lambda-auth: Lambda em modo HTTP local, build direto do GitHub, porta 9180;
+# - lambda-auth-keys: gera a chave RSA de assinatura uma vez, num volume;
+# - lambda-auth-db: cria as tabelas da Lambda e a view auth_clients no banco
+#   da aplicação depois das migrations;
+# - techchallenge.api: passa a aceitar o JWT da Lambda nas rotas /api/v1/cliente.
+# O código de login chega no mesmo Mailpit da aplicação (http://localhost:8025).
+services:
+  lambda-auth-keys:
+    build:
+      context: https://github.com/tech-challenge-SOAT16/tech-challenge-lambda.git#main
+      target: local
+    image: techchallenge-lambda-local
+    user: root
+    entrypoint: ["sh", "-c", "cd /keys && touch .env && dotnet /app/TechChallenge.Lambda.dll --bootstrap && chown -R 1654:1654 /keys"]
+    volumes:
+      - lambda-keys:/keys
+    restart: "no"
+
+  lambda-auth-db:
+    image: postgres:17-alpine
+    environment:
+      PGPASSWORD: "Dev@123456"
+    command: ["psql", "-h", "db", "-U", "postgres", "-d", "TechChallenge", "-v", "ON_ERROR_STOP=1", "-f", "/sql/auth-local.sql"]
+    volumes:
+      - ./lambda/auth-local.sql:/sql/auth-local.sql:ro
+    depends_on:
+      techchallenge.api:
+        condition: service_healthy
+    restart: "no"
+
+  lambda-auth:
+    image: techchallenge-lambda-local
+    environment:
+      APP_ENV: "local"
+      DATABASE_CONNECTION: "Host=db;Port=5432;Database=TechChallenge;Username=postgres;Password=Dev@123456"
+      JWT_PRIVATE_KEY_FILE: "/keys/.local/private.pem"
+      OTP_HMAC_SECRET: "demo-local-otp-secret-somente-para-desenvolvimento"
+      JWT_ISSUER: "http://lambda-auth:8080"
+      JWT_AUDIENCE: "tech-challenge-api"
+      JWT_KEY_ID: "local-1"
+      SMTP_HOST: "mailpit"
+      SMTP_PORT: "1025"
+      EMAIL_SENDER: "auth@oficina.local"
+    ports:
+      - "9180:8080"
+    volumes:
+      - lambda-keys:/keys:ro
+    depends_on:
+      lambda-auth-keys:
+        condition: service_completed_successfully
+      lambda-auth-db:
+        condition: service_completed_successfully
+
+  techchallenge.api:
+    environment:
+      CustomerAuth__Enabled: "true"
+      CustomerAuth__Authority: "http://lambda-auth:8080"
+      CustomerAuth__Issuer: "http://lambda-auth:8080"
+      CustomerAuth__Audience: "tech-challenge-api"
+      CustomerAuth__RequireHttpsMetadata: "false"
+
+volumes:
+  lambda-keys:

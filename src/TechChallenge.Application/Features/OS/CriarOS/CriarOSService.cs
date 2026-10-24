@@ -3,6 +3,7 @@ using FluentValidation;
 using TechChallenge.Domain.Entities;
 using TechChallenge.Domain.Enums;
 using TechChallenge.Application.Abstractions.Notifications;
+using TechChallenge.Application.Abstractions.Observability;
 using TechChallenge.Application.Abstractions.Repositories;
 using TechChallenge.Application.Notifications;
 
@@ -88,6 +89,7 @@ public class CriarOSService
         }
 
         await _ordemServicoRepository.AddAsync(os);
+        TechChallengeMetrics.OrdensCriadas.Add(1);
         _notificationService.NotificarFuncionariosPorFuncao(
             TipoFuncionario.Mecanico,
             "Nova OS na fila",

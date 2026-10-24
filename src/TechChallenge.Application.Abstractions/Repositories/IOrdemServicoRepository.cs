@@ -9,6 +9,7 @@ namespace TechChallenge.Application.Abstractions.Repositories
         Task<List<OrdemServico>> GetByStatusAsync(StatusOS status);
         Task<OrdemServico?> GetOSAtivaMecanicoAsync(Guid mecanicoId);
         Task<bool> ExistePorClienteAsync(Guid clienteId);
+        Task<List<OrdemServico>> GetByClienteAsync(Guid clienteId);
         Task<bool> ExistePorFuncionarioAsync(Guid funcionarioId);
         Task<bool> ExistePorVeiculoAsync(Guid veiculoId);
         Task<OrdemServico?> GetByCodigoAcompanhamentoAsync(string codigoAcompanhamento);

@@ -1,9 +1,9 @@
 # Kubernetes — Aplicação principal (Fase 3)
 
 Este repositório contém apenas a aplicação `TechChallenge.Api` executada em
-Kubernetes no AWS EKS. Cluster, banco gerenciado, Function de autenticação e API
-Gateway pertencem a outros repositórios Terraform. Aqui ficam os manifests
-Kustomize e o CI/CD de publicação no ECR e deploy no EKS.
+Kubernetes no AWS EKS. Cluster, Kong, banco gerenciado e Function de
+autenticação pertencem a outros repositórios. Aqui ficam os manifests Kustomize
+e o CI/CD de publicação da imagem.
 
 ```text
 k8s/
@@ -25,25 +25,28 @@ k8s/
 ## Entrada da aplicação
 
 A API é exposta internamente pelo Service ClusterIP `techchallenge-api:8080`.
-Não há Ingress ou LoadBalancer neste repositório. O API Gateway e a integração
-privada por VPC Link/target interno serão criados pelo repositório de
-infraestrutura. TLS termina no API Gateway.
+Não há Ingress ou LoadBalancer neste repositório: o Kong do
+[tech-challenge-k8s](https://github.com/tech-challenge-SOAT16/tech-challenge-k8s)
+publica as rotas por um NLB.
 
 ## Autenticação
 
-Em produção a aplicação apenas valida JWT **RS256**. O overlay configura
-`Jwt__Authority`, `Jwt__Issuer`, `Jwt__Audience`, HTTPS metadata e desabilita a
-emissão local. A API busca o documento OIDC e as chaves públicas JWKS do emissor.
-Nenhuma chave privada ou segredo de assinatura JWT entra no pod.
+Dois esquemas, configurados no overlay:
 
-Os valores versionados ainda são placeholders `replace-me` e devem ser
-substituídos quando o API Gateway/Function fornecerem as URLs. O contrato
-completo está em [Autenticação da Fase 3](../docs/autenticacao-fase-3.md).
+- funcionários: login da própria API (`Jwt__EnableLocalIssuance=true`), com a
+  chave `Jwt__LocalSigningKey` vinda do Secret;
+- clientes: JWT RS256 da Function Serverless (`CustomerAuth__*`), validado pelo
+  JWKS do emissor e aceito só em `/api/v1/cliente`.
+
+`CustomerAuth__Authority`, `CustomerAuth__Issuer` e `ApprovalLinks__BaseUrl`
+ainda são placeholders `replace-me`, a substituir pelos outputs da Lambda e do
+Kong. Detalhes em [Autenticação da Fase 3](../docs/autenticacao-fase-3.md).
 
 ## Secret criado pela infraestrutura
 
-O Deployment referencia `techchallenge-api-secrets` no namespace
-`techchallenge`. Este repositório não cria o Secret. Chaves esperadas:
+O Deployment referencia `techchallenge-api-secrets`, criado pelo
+[tech-challenge-database](https://github.com/tech-challenge-SOAT16/tech-challenge-database)
+em cada namespace. Este repositório não cria o Secret. Chaves esperadas:
 
 | Chave | Finalidade |
 | --- | --- |
@@ -51,10 +54,11 @@ O Deployment referencia `techchallenge-api-secrets` no namespace
 | `ApprovalLinks__SigningKey` | HMAC exclusivo dos links de aprovação/recusa |
 | `IntegracaoExterna__ApiKey` | Autenticação do callback externo |
 | `Seed__AdminPassword` | Senha inicial do administrador |
-| `Smtp__Host`, `Smtp__Port`, `Smtp__Username`, `Smtp__Password` | SMTP gerenciado |
+| `Jwt__LocalSigningKey` | Assinatura dos tokens de funcionários |
+| `Smtp__Host`, `Smtp__Port`, `Smtp__Username`, `Smtp__Password` | SMTP (Mailpit do namespace) |
 
-OIDC discovery, JWKS, issuer, audience e chaves públicas são configurações não
-sensíveis e ficam no ConfigMap, não no Secret.
+Issuer, audience e a URL do emissor dos clientes são configurações não
+sensíveis e ficam no ConfigMap.
 
 ## GitHub Actions e OIDC AWS
 
@@ -77,6 +81,15 @@ Fluxo automático em push para `main`:
 4. atualiza a imagem no overlay em memória;
 5. `kubectl apply -k k8s/overlays/aws-eks`;
 6. aguarda o rollout do Deployment.
+
+> **Fluxo alvo (GitOps).** O Argo CD do
+> [tech-challenge-k8s](https://github.com/tech-challenge-SOAT16/tech-challenge-k8s)
+> lê os overlays da `main` deste repositório. Quando o `deploy.yml` for ajustado,
+> os passos 4 a 6 viram um commit da nova tag no overlay, feito pelo
+> `github-actions[bot]` direto na `main`, e o Argo CD aplica. No AWS Academy
+> não é possível criar a role OIDC; a pipeline usará as chaves temporárias da
+> sessão (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`)
+> apenas para publicar no ECR.
 
 ## Validar e aplicar manualmente
 

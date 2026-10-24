@@ -87,4 +87,29 @@ public class FinalizarOSServiceTests
             .WithMessage($"Transição inválida: {StatusOS.AguardandoAprovacao} -> {StatusOS.Finalizada}.");
         repository.Verify(repo => repo.UpdateAsync(It.IsAny<OrdemServico>()), Times.Never);
     }
+
+    [Theory]
+    [InlineData(StatusOS.Entregue)]
+    [InlineData(StatusOS.Finalizada)]
+    [InlineData(StatusOS.AguardandoAprovacao)]
+    public async Task NaoDeveBaixarEstoqueQuandoTransicaoForInvalida(StatusOS status)
+    {
+        var produto = new Produto(Guid.NewGuid(), "Filtro", 4, Guid.NewGuid());
+        var os = new OrdemServico(Guid.NewGuid(), string.Empty, string.Empty, status, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), DateTime.UtcNow, null, null, 0, 0, 0);
+        os.AdicionarProdutos(new OrdemServicoProdutos(Guid.NewGuid(), os.Id, produto.Id, 0, 1, 0, 0));
+        var repository = new Mock<IOrdemServicoRepository>();
+        repository.Setup(repo => repo.GetByIdAsync(os.Id)).ReturnsAsync(os);
+        var estoque = new TechChallenge.Domain.Entities.Estoque(Guid.NewGuid(), produto.Id, 10);
+        var estoqueRepository = new Mock<IEstoqueRepository>();
+        estoqueRepository.Setup(repo => repo.GetByIdProdutoAsync(produto.Id)).ReturnsAsync(estoque);
+        var service = new FinalizarOSService(repository.Object, estoqueRepository.Object, new FinalizarOSCommandValidator());
+
+        var act = () => service.FinalizarOS(new FinalizarOSCommand { OrdemServicoId = os.Id });
+
+        (await act.Should().ThrowAsync<InvalidOperationException>())
+            .WithMessage($"Transição inválida: {status} -> {StatusOS.Finalizada}.");
+        estoque.Quantidade.Should().Be(10);
+        estoqueRepository.Verify(repo => repo.UpdateAsync(It.IsAny<TechChallenge.Domain.Entities.Estoque>()), Times.Never);
+        repository.Verify(repo => repo.UpdateAsync(It.IsAny<OrdemServico>()), Times.Never);
+    }
 }

@@ -36,6 +36,9 @@ public class FinalizarOSService
         if (os is null)
             throw new KeyNotFoundException($"OS com Id {command.OrdemServicoId} não encontrada.");
 
+        // Valida antes de baixar o estoque: a baixa é persistida imediatamente pelo repositório.
+        os.ValidarTransicaoPara(StatusOS.Finalizada);
+
         foreach (var item in os.Produtos)
         {
             var estoque = await _estoqueRepository.GetByIdProdutoAsync(item.ProdutoId);

@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using TechChallenge.Application.Abstractions.Observability;
 using TechChallenge.Domain.Entities;
 
 namespace TechChallenge.Infrastructure.Database.Context
@@ -37,8 +38,10 @@ namespace TechChallenge.Infrastructure.Database.Context
         public override int SaveChanges(bool acceptAllChangesOnSuccess)
         {
             var ordensComEventos = PrepararOutbox();
+            var transicoes = CalcularTransicoes(ordensComEventos, ObterUltimasTransicoes(ordensComEventos));
             var resultado = base.SaveChanges(acceptAllChangesOnSuccess);
             LimparEventos(ordensComEventos);
+            RegistrarMetricas(transicoes);
             return resultado;
         }
 
@@ -47,8 +50,12 @@ namespace TechChallenge.Infrastructure.Database.Context
             CancellationToken cancellationToken = default)
         {
             var ordensComEventos = PrepararOutbox();
+            var transicoes = CalcularTransicoes(
+                ordensComEventos,
+                await ObterUltimasTransicoesAsync(ordensComEventos, cancellationToken));
             var resultado = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
             LimparEventos(ordensComEventos);
+            RegistrarMetricas(transicoes);
             return resultado;
         }
 
@@ -70,6 +77,64 @@ namespace TechChallenge.Infrastructure.Database.Context
             }
 
             return ordensComEventos;
+        }
+
+        // A outbox guarda uma linha por transição; a mais recente marca a entrada no status atual.
+        private IQueryable<UltimaTransicao> ConsultarUltimasTransicoes(List<OrdemServico> ordens)
+        {
+            var ids = ordens.Select(ordem => ordem.Id).ToList();
+            return NotificacaoStatusOutbox.AsNoTracking()
+                .Where(item => ids.Contains(item.OrdemServicoId))
+                .GroupBy(item => item.OrdemServicoId)
+                .Select(grupo => new UltimaTransicao(grupo.Key, grupo.Max(item => item.CriadaEm)));
+        }
+
+        private Dictionary<Guid, DateTime> ObterUltimasTransicoes(List<OrdemServico> ordens) =>
+            ordens.Count == 0
+                ? []
+                : ConsultarUltimasTransicoes(ordens).ToDictionary(item => item.OrdemServicoId, item => item.CriadaEm);
+
+        private async Task<Dictionary<Guid, DateTime>> ObterUltimasTransicoesAsync(
+            List<OrdemServico> ordens,
+            CancellationToken cancellationToken) =>
+            ordens.Count == 0
+                ? []
+                : await ConsultarUltimasTransicoes(ordens)
+                    .ToDictionaryAsync(item => item.OrdemServicoId, item => item.CriadaEm, cancellationToken);
+
+        private sealed record UltimaTransicao(Guid OrdemServicoId, DateTime CriadaEm);
+
+        private static List<(string Anterior, string Atual, double Segundos)> CalcularTransicoes(
+            List<OrdemServico> ordens,
+            Dictionary<Guid, DateTime> ultimasTransicoes)
+        {
+            var transicoes = new List<(string, string, double)>();
+            foreach (var ordem in ordens)
+            {
+                var inicio = ultimasTransicoes.TryGetValue(ordem.Id, out var ultima) ? ultima : ordem.DataCriacao;
+                foreach (var evento in ordem.EventosDominio.OrderBy(item => item.OcorridoEm))
+                {
+                    var segundos = Math.Max(0, (evento.OcorridoEm - inicio).TotalSeconds);
+                    transicoes.Add((evento.StatusAnterior.ToString(), evento.StatusAtual.ToString(), segundos));
+                    inicio = evento.OcorridoEm;
+                }
+            }
+
+            return transicoes;
+        }
+
+        private static void RegistrarMetricas(List<(string Anterior, string Atual, double Segundos)> transicoes)
+        {
+            foreach (var (anterior, atual, segundos) in transicoes)
+            {
+                TechChallengeMetrics.Transicoes.Add(
+                    1,
+                    new KeyValuePair<string, object?>("status_anterior", anterior),
+                    new KeyValuePair<string, object?>("status_atual", atual));
+                TechChallengeMetrics.TempoNoStatus.Record(
+                    segundos,
+                    new KeyValuePair<string, object?>("status", anterior));
+            }
         }
 
         private static void LimparEventos(IEnumerable<OrdemServico> ordens)
