@@ -78,6 +78,15 @@ Fluxo automático em push para `main`:
 5. `kubectl apply -k k8s/overlays/aws-eks`;
 6. aguarda o rollout do Deployment.
 
+> **Fluxo alvo (GitOps).** O Argo CD do
+> [tech-challenge-k8s](https://github.com/tech-challenge-SOAT16/tech-challenge-k8s)
+> lê os overlays da `main` deste repositório. Quando o `deploy.yml` for ajustado,
+> os passos 4 a 6 viram um commit da nova tag no overlay, feito pelo
+> `github-actions[bot]` direto na `main`, e o Argo CD aplica. No AWS Academy
+> não é possível criar a role OIDC; a pipeline usará as chaves temporárias da
+> sessão (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`)
+> apenas para publicar no ECR.
+
 ## Validar e aplicar manualmente
 
 ```bash
