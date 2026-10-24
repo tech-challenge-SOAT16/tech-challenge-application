@@ -58,7 +58,8 @@ não na AWS.
 ### Este repositório
 
 - [ ] Ajustar o `deploy.yml` para GitOps: publicar no ECR com as chaves do Academy e commitar a tag no overlay do ambiente direto na `main` (`github-actions[bot]`), removendo kubeconfig, `kubectl` e espera de rollout. Isso também elimina o pin `kubectl v1.30.4`, incompatível com o EKS 1.35.
-- [ ] Liberar a exceção do ruleset da `main` para o commit automático da tag. O GitHub não aceita o bot do Actions como exceção em ruleset de repositório desta organização; a alternativa é uma deploy key de escrita usada só pelo `deploy.yml`, com `DeployKey` na lista de bypass do ruleset.
+- [x] Exceção `DeployKey` no ruleset da `main` para o commit automático da tag (o GitHub não aceita o bot do Actions como exceção em ruleset de repositório desta organização).
+- [ ] Criar a deploy key de escrita deste repositório e guardar a chave privada como secret para o `deploy.yml`. Até isso existir, nenhuma chave fura a proteção.
 - [ ] Criar o overlay `k8s/overlays/aws-eks-homolog` (namespace `techchallenge-homolog`, login local e dados de demo ligados).
 - [ ] Adicionar `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.monitoring.svc.cluster.local:4317`, `OTEL_SERVICE_NAME` e `Smtp__Host=mailpit` aos overlays.
 - [ ] Trocar os valores `replace-me` de `Jwt__Authority`, `Jwt__Issuer` e `ApprovalLinks__BaseUrl` pelos outputs reais da Lambda e do Kong.
@@ -75,8 +76,9 @@ não na AWS.
 - [x] Branch padrão do `tech-challenge-lambda` trocada para `main`.
 - [x] `main` protegida: PR com 1 aprovação, sem force push nem exclusão e checks obrigatórios (aplicação: testes unitários e de integração; k8s: validação Terraform e render GitOps; banco: validação Terraform). Na Lambda vale a proteção que já existia (PR obrigatório).
 - [x] Descrição nos quatro repositórios e exclusão automática da branch após o merge.
-- [ ] Adicionar o usuário `soat-architecture` aos quatro repositórios (exige um admin; a ação concede acesso a um usuário externo).
-- [ ] Apagar as branches já mescladas `feature/api-gateway-kong` (aplicação) e `feature/lambda-auth` (Lambda); nenhuma tem commits fora da `main`.
+- [x] Convite do usuário `soat-architecture` com escrita nos quatro repositórios.
+- [ ] Confirmar que o `soat-architecture` aceitou os convites (necessário para o PDF).
+- [x] Branches já mescladas `feature/api-gateway-kong` (aplicação) e `feature/lambda-auth` (Lambda) removidas.
 - [ ] Avaliar o repositório privado `demo-repository`, criado automaticamente pelo GitHub e sem relação com o projeto.
 - [ ] Cadastrar o secret `DISCORD_WEBHOOK_URL` para as notificações.
 
