@@ -10,7 +10,7 @@ não na AWS.
 | Repositório | Estado |
 | --- | --- |
 | [tech-challenge-lambda](https://github.com/tech-challenge-SOAT16/tech-challenge-lambda) | Na `main`; deploy desligado até haver conta AWS |
-| [tech-challenge-k8s](https://github.com/tech-challenge-SOAT16/tech-challenge-k8s) | [PR #1](https://github.com/tech-challenge-SOAT16/tech-challenge-k8s/pull/1) aguardando revisão |
+| [tech-challenge-k8s](https://github.com/tech-challenge-SOAT16/tech-challenge-k8s) | Na `main` ([PR #1](https://github.com/tech-challenge-SOAT16/tech-challenge-k8s/pull/1) mesclado); plan e apply desligados até haver conta AWS |
 | [tech-challenge-database](https://github.com/tech-challenge-SOAT16/tech-challenge-database) | Na `main`; plan e apply desligados até haver conta AWS |
 | tech-challenge-application (este) | [PR #3](https://github.com/tech-challenge-SOAT16/tech-challenge-application/pull/3) aguardando revisão |
 
@@ -87,7 +87,7 @@ não na AWS.
 
 ### Com acesso à AWS
 
-- [ ] Cadastrar as chaves da sessão do Academy e `AWS_DEPLOY_ENABLED=true`.
+- [ ] Cadastrar as chaves da sessão do Academy e ligar `AWS_DEPLOY_ENABLED=true` (hoje desligada em todos os repositórios: `false` no k8s e ausente nos demais, então as pipelines só rodam a validação).
 - [ ] Aplicar `tech-challenge-k8s`, depois `tech-challenge-database`, depois publicar a imagem.
 - [ ] Preencher o `TFVARS_JSON` da Lambda com os outputs de rede e do segredo do banco, e fazer o primeiro deploy.
 - [ ] Validar ponta a ponta: login por CPF, JWT aceito pela API, abertura de OS, rollout pelo Argo CD, dashboards e alertas com dados reais.
