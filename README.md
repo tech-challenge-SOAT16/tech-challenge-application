@@ -29,7 +29,7 @@ O histórico das fases anteriores está no repositório legado
 | Manifests Kubernetes para EKS (probes, HPA, PDB, segurança) | Concluído; overlay de homologação pendente |
 | CI: build, testes unitários e de integração | Concluído |
 | CD por GitOps (pipeline grava a tag; Argo CD aplica) | Pendente: ajuste do `deploy.yml` |
-| Autenticação de clientes com o JWT da Lambda | Pendente: alinhar contrato do token |
+| Autenticação de clientes com o JWT da Lambda | Concluído e validado com a Lambda local: área do cliente em `/api/v1/cliente` |
 
 Pendências detalhadas e responsáveis: [docs/ToDo.md](docs/ToDo.md).
 
@@ -37,7 +37,8 @@ Pendências detalhadas e responsáveis: [docs/ToDo.md](docs/ToDo.md).
 
 - cadastro de clientes, veículos, funcionários, serviços e produtos;
 - categorias de produto, serviço e veículo;
-- autenticação JWT, refresh token e autorização por perfil;
+- autenticação de funcionários (JWT, refresh token e autorização por perfil);
+- área do cliente autenticado por CPF (JWT da Lambda) com as próprias OS;
 - abertura da OS com cliente, veículo, serviços e produtos;
 - diagnóstico, orçamento, aprovação, execução, finalização e entrega;
 - aprovação ou recusa externa com API key, correlação e idempotência;
@@ -85,7 +86,8 @@ flowchart LR
     Cliente -->|POST /auth/login, /auth/verify| APIGW --> Lambda
     Lambda --> RDS
     Lambda --> SM
-    Cliente -->|Bearer JWT| NLB --> Kong --> API
+    Cliente -->|Bearer JWT da Lambda| NLB --> Kong --> API
+    Funcionario[Funcionário] -->|login da API| NLB
     API --> RDS
     API -->|SMTP| Mailpit
     API -->|OTLP| OTel --> Obs
@@ -124,7 +126,7 @@ flowchart LR
 | `TechChallenge.IntegrationTests` | Testes de integração HTTP |
 
 Tecnologias principais: **.NET 10**, ASP.NET Core Minimal APIs, Entity Framework
-Core, PostgreSQL, JWT (RS256 em produção), OpenTelemetry, FluentValidation,
+Core, PostgreSQL, JWT (RS256 para clientes, HS256 para funcionários), OpenTelemetry, FluentValidation,
 xUnit, Docker, Kubernetes (EKS), Kustomize, Argo CD, Kong e GitHub Actions.
 
 ## APIs
@@ -284,10 +286,11 @@ nova tag no overlay do ambiente, com commit direto na `main` feito pelo
 
 ## Segurança
 
-- em produção, a API só aceita JWT RS256 do emissor externo, validado por
-  OIDC discovery/JWKS;
-- emissão local HS256 restrita a desenvolvimento e testes, bloqueada em
-  Production;
+- clientes: JWT RS256 da Function Serverless, validado por OIDC discovery/JWKS
+  e aceito só na área do cliente (`/api/v1/cliente`), que filtra pelo próprio
+  cliente;
+- funcionários: login da API com JWT HS256 (chave no Secret); todas as rotas
+  da oficina exigem perfil, inclusive as de leitura;
 - perfis `Administrador`, `Vendedor` e `Mecanico`; autenticação obrigatória por
   padrão;
 - webhook externo protegido por `X-Integration-Key` e idempotente;
@@ -305,7 +308,7 @@ nova tag no overlay do ambiente, com commit direto na `main` feito pelo
 | [Pendências da Fase 3](docs/ToDo.md) | O que falta, por repositório |
 | [Monitoramento](docs/monitoramento.md) | Stack, dashboards, métricas, correlação e alertas |
 | [Demo da Fase 3](docs/demo/fase-3/README.md) | Credenciais, subida do ambiente e roteiro do vídeo |
-| [Autenticação da Fase 3](docs/autenticacao-fase-3.md) | Contrato do JWT e configuração da API |
+| [Autenticação da Fase 3](docs/autenticacao-fase-3.md) | Clientes (JWT da Lambda) e funcionários, com diagrama de sequência |
 | [DDD](docs/ddd.md) e [Event Storming](docs/event-storming.md) | Domínio, eventos e fluxos do negócio |
 | [Auditoria do Estoque](docs/auditoria-estoque.md) | Contratos, regras, persistência e testes |
 | [Índice completo](docs/README.md) | Inclui os documentos da Fase 2 |

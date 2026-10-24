@@ -61,15 +61,18 @@ não na AWS.
 - [x] Exceção `DeployKey` no ruleset da `main` para o commit automático da tag (o GitHub não aceita o bot do Actions como exceção em ruleset de repositório desta organização).
 - [ ] Criar a deploy key de escrita deste repositório e guardar a chave privada como secret para o `deploy.yml`. Até isso existir, nenhuma chave fura a proteção.
 - [ ] Criar o overlay `k8s/overlays/aws-eks-homolog` (namespace `techchallenge-homolog`, login local e dados de demo ligados).
-- [ ] Adicionar `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.monitoring.svc.cluster.local:4317`, `OTEL_SERVICE_NAME` e `Smtp__Host=mailpit` aos overlays.
-- [ ] Trocar os valores `replace-me` de `Jwt__Authority`, `Jwt__Issuer` e `ApprovalLinks__BaseUrl` pelos outputs reais da Lambda e do Kong.
+- [x] `OTEL_EXPORTER_OTLP_ENDPOINT` e `OTEL_SERVICE_NAME` no overlay `aws-eks`; SMTP sem TLS para o Mailpit do namespace.
+- [ ] Trocar os valores `replace-me` de `CustomerAuth__Authority`, `CustomerAuth__Issuer` e `ApprovalLinks__BaseUrl` pelos outputs reais da Lambda e do Kong.
 - [ ] Decidir a estratégia de migrations com duas réplicas iniciais (Job dedicado ou advisory lock).
 
 ### Integração com a Lambda de autenticação
 
-- [ ] Alinhar a audiência do token: a API espera `techchallenge-api` e a Lambda emite `tech-challenge-api`.
-- [ ] Definir como clientes autenticados por CPF acessam as rotas protegidas: a Lambda emite `scope=customer` sem `role`, e as políticas atuais da API exigem `Administrador`, `Vendedor` ou `Mecanico`.
-- [ ] Definir como funcionários se autenticam em produção, já que o login local não é registrado nesse ambiente.
+- [x] Esquema `Customer` para o JWT da Lambda, com audiência `tech-challenge-api` e política `Cliente` (`scope=customer`) ([autenticacao-fase-3.md](autenticacao-fase-3.md)).
+- [x] Área do cliente: `GET /api/v1/cliente/ordens-servico` e `/{id}`, filtradas pelo `sub` do token.
+- [x] Rotas da oficina exigem perfil de funcionário, inclusive as de leitura; token de cliente recebe 401 nelas.
+- [x] Funcionários continuam com o login da API em produção (chave `Jwt__LocalSigningKey` no Secret).
+- [x] Validado com a Lambda local apontando para o banco da aplicação: login por CPF, OS do próprio cliente e bloqueio das rotas da oficina.
+- [ ] Incluir `Jwt__LocalSigningKey` no Secret gerado pelo `tech-challenge-database`.
 
 ### Organização e GitHub
 

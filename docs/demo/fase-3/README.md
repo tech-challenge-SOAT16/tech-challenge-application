@@ -82,7 +82,7 @@ kubectl -n kong port-forward svc/kong-gateway-proxy 8000:80
 | Serviço | Endereço | Login |
 | --- | --- | --- |
 | API de homologação | `http://localhost:8000/homolog` | usuários de demo (`Demo@123`) |
-| API de produção | `http://localhost:8000` | JWT da Lambda de autenticação |
+| API de produção | `http://localhost:8000` | funcionários: `/api/v1/auth/login`; clientes: JWT da Lambda em `/api/v1/cliente/ordens-servico` |
 | Argo CD | `http://localhost:8000/argocd` | `admin` / comando abaixo |
 | Grafana | `http://localhost:8000/grafana` | `admin` / comando abaixo |
 | Mailpit | `http://localhost:8025` | port-forward abaixo |
