@@ -1,0 +1,77 @@
+name: Kubernetes manifests
+
+# Renderiza e valida os manifests Kustomize sem precisar de acesso ao cluster
+# ou credenciais da AWS. Roda em todo pull request e em pushes em main.
+on:
+  push:
+    branches:
+      - main
+      - homologacao
+    paths:
+      - 'k8s/**'
+      - '.github/workflows/manifest-validation.yml'
+  pull_request:
+    branches:
+      - main
+      - homologacao
+    paths:
+      - 'k8s/**'
+      - '.github/workflows/manifest-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  KUSTOMIZE_VERSION: v5.4.3
+  KUBECONFORM_VERSION: v0.6.7
+
+jobs:
+  validate:
+    name: Render and validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install kustomize
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL "$url" -o kustomize.tar.gz
+          tar -xzf kustomize.tar.gz
+          sudo install -m 0755 kustomize /usr/local/bin/kustomize
+          kustomize version
+
+      - name: Install kubeconform
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          curl -fsSL "$url" -o kubeconform.tar.gz
+          tar -xzf kubeconform.tar.gz
+          sudo install -m 0755 kubeconform /usr/local/bin/kubeconform
+          kubeconform -v
+
+      - name: Render base
+        shell: bash
+        run: |
+          set -euo pipefail
+          kustomize build k8s/base | tee /tmp/base.yaml >/dev/null
+          wc -l /tmp/base.yaml
+
+      - name: Render overlay aws-eks
+        shell: bash
+        run: |
+          set -euo pipefail
+          kustomize build k8s/overlays/aws-eks | tee /tmp/aws-eks.yaml >/dev/null
+          wc -l /tmp/aws-eks.yaml
+
+      - name: Validate schemas with kubeconform
+        shell: bash
+        run: |
+          set -euo pipefail
+          # strict falha se houver campos adicionais; summary dá contexto no log.
+          kubeconform -strict -summary -ignore-missing-schemas /tmp/base.yaml
+          kubeconform -strict -summary -ignore-missing-schemas /tmp/aws-eks.yaml

@@ -57,16 +57,15 @@ builder.Services.AddHealthChecks()
 
 var app = builder.Build();
 
-// No laboratório, o processo só começa a servir HTTP após migrations e seed.
+// O processo só começa a servir HTTP após migrations e seed.
 // Se a inicialização falhar, o processo termina e o Kubernetes tenta novamente.
+// Como o HPA inicia com minReplicas >= 2, usamos um advisory lock PostgreSQL
+// (pg_advisory_lock) para garantir que apenas uma réplica execute migrations
+// e seed por vez; as demais ficam bloqueadas no lock até o término e, depois,
+// apenas revalidam que não há migrations pendentes.
 if (!app.Environment.IsEnvironment("Testing"))
 {
-    using (var scope = app.Services.CreateScope())
-    {
-        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        await context.Database.MigrateAsync();
-    }
-    await DataSeeder.SeedAsync(app.Services);
+    await ApplyMigrationsAndSeedAsync(app.Services);
 }
 
 app.UseCorrelationId();
@@ -114,6 +113,62 @@ app.MapDecisoesOrcamentoEmailEndpoints();
 app.MapAreaClienteEndpoints();
 
 await app.RunAsync();
+
+static async Task ApplyMigrationsAndSeedAsync(IServiceProvider services)
+{
+    // Chave arbitrária estável para o lock de migrations desta aplicação.
+    // Qualquer bigint fixo serve, desde que não colida com outros locks na
+    // mesma instância PostgreSQL. Documentar o valor evita colisões futuras.
+    const long migrationsLockKey = 727292024L;
+
+    using var scope = services.CreateScope();
+    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    var logger = scope.ServiceProvider
+        .GetRequiredService<ILoggerFactory>()
+        .CreateLogger("Startup.Migrations");
+
+    var connection = context.Database.GetDbConnection();
+    var openedHere = connection.State != System.Data.ConnectionState.Open;
+    if (openedHere)
+    {
+        await connection.OpenAsync();
+    }
+
+    try
+    {
+        logger.LogInformation(
+            "Aguardando advisory lock de migrations (chave {LockKey}).", migrationsLockKey);
+
+        await using (var lockCommand = connection.CreateCommand())
+        {
+            lockCommand.CommandText = $"SELECT pg_advisory_lock({migrationsLockKey});";
+            await lockCommand.ExecuteNonQueryAsync();
+        }
+
+        try
+        {
+            logger.LogInformation("Advisory lock adquirido. Aplicando migrations.");
+            await context.Database.MigrateAsync();
+
+            logger.LogInformation("Migrations concluídas. Executando seed.");
+            await DataSeeder.SeedAsync(services);
+        }
+        finally
+        {
+            await using var unlockCommand = connection.CreateCommand();
+            unlockCommand.CommandText = $"SELECT pg_advisory_unlock({migrationsLockKey});";
+            await unlockCommand.ExecuteNonQueryAsync();
+            logger.LogInformation("Advisory lock liberado.");
+        }
+    }
+    finally
+    {
+        if (openedHere)
+        {
+            await connection.CloseAsync();
+        }
+    }
+}
 
 public partial class Program
 {

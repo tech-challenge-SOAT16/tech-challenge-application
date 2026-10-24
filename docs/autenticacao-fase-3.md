@@ -93,6 +93,19 @@ HMAC com a chave independente `ApprovalLinks__SigningKey`, também no Secret.
 
 ## Decisão
 
+Antes de habilitar o ambiente de produção, confirmar com o repositório da
+Function Serverless:
+
+- URL definitiva do emissor (`Jwt__Authority` / `Jwt__Issuer`) publicada pelo
+  API Gateway;
+- URL do documento de discovery, caso não siga o padrão
+  `{Authority}/.well-known/openid-configuration` (seria aplicada em
+  `Jwt__MetadataAddress`);
+- `aud` definitivo exigido pela Function (hoje usamos `techchallenge-api`);
+- quem é dono dos fluxos de refresh, logout e troca de senha — Function ou API;
+- base de persistência dos usuários (compartilhada com a API ou própria da
+  Function) e estratégia de revogação de tokens (lista negra, `jti` curto,
+  rotação de `kid`).
 A Function emite apenas tokens de cliente (`scope=customer`, sem perfil). Para
 que funcionários continuem operando a oficina na nuvem, o login deles permanece
 na API, e os dois tipos de token ficam em esquemas separados. Assim, um cliente

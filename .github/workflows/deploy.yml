@@ -1,4 +1,14 @@
 name: Deploy to Amazon EKS
+
+# Dispara deploy automático nas branches de homologação e produção, conforme
+# a regra "Deploy automático das branches de homologação e produção" do PDF.
+# O GitHub Environment é selecionado pela branch, isolando AWS_ROLE_ARN,
+# AWS_REGION e EKS_CLUSTER_NAME por ambiente.
+on:
+  push:
+    branches:
+      - main
+      - homologacao
 on:
   push:
     branches: [main, develop]
@@ -14,13 +24,45 @@ concurrency:
   cancel-in-progress: false
 jobs:
   validate:
-    name: Build and test
+    name: Build, test and validate manifests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore TechChallenge.slnx
+
+      - name: Build
+        run: dotnet build TechChallenge.slnx --configuration Release --no-restore
+
+      - name: Unit tests
+        run: dotnet test tests/TechChallenge.Tests/TechChallenge.Tests.csproj --configuration Release --no-build
+
+      - name: Integration tests
+        run: dotnet test tests/TechChallenge.IntegrationTests/TechChallenge.IntegrationTests.csproj --configuration Release --no-build
+
+      - name: Install kustomize
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL "$url" -o kustomize.tar.gz
+          tar -xzf kustomize.tar.gz
+          sudo install -m 0755 kustomize /usr/local/bin/kustomize
+          kustomize version
+
+      - name: Render and validate manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "== k8s/base =="
+          kustomize build k8s/base >/dev/null
+          echo "== ${KUSTOMIZE_OVERLAY} =="
+          kustomize build "${KUSTOMIZE_OVERLAY}" >/dev/null
+
       - run: dotnet restore TechChallenge.slnx
       - run: dotnet build TechChallenge.slnx --configuration Release --no-restore
       - run: dotnet test tests/TechChallenge.Tests/TechChallenge.Tests.csproj --configuration Release --no-build
@@ -30,6 +72,11 @@ jobs:
     needs: validate
     if: vars.AWS_DEPLOY_ENABLED == 'true' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
     runs-on: ubuntu-latest
+    # main -> environment production ; homologacao -> environment homologacao.
+    # Cada environment possui seus próprios secrets/variables (AWS_ROLE_ARN,
+    # AWS_REGION, EKS_CLUSTER_NAME), permitindo apontar para clusters/contas
+    # diferentes sem alterar o workflow.
+    environment: ${{ github.ref_name == 'main' && 'production' || 'homologacao' }}
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'homolog' }}
     permissions:
       contents: write

@@ -1,6 +1,13 @@
 <Solution>
   <Folder Name="/0 - docs/">
     <File Path="README.md" />
+    <File Path="docs/autenticacao-fase-3.md" />
+    <File Path="docs/auditoria-estoque.md" />
+    <File Path="docs/ddd.md" />
+    <File Path="docs/event-storming.md" />
+    <File Path="docs/relatorio-vulnerabilidades.md" />
+    <File Path="docs/requisitos.md" />
+    <File Path="docs/testes.md" />
   </Folder>
   <Folder Name="/1 - presentation/">
     <Project Path="src/TechChallenge.Api/TechChallenge.Api.csproj" />
@@ -22,6 +29,30 @@
   <Folder Name="/5 - tests/">
     <Project Path="tests/TechChallenge.IntegrationTests/TechChallenge.IntegrationTests.csproj" />
     <Project Path="tests\TechChallenge.Tests\TechChallenge.Tests.csproj" />
+  </Folder>
+  <Folder Name="/8 - k8s/">
+    <File Path="k8s/README.md" />
+  </Folder>
+  <Folder Name="/8 - k8s/base/">
+    <File Path="k8s/base/kustomization.yaml" />
+  </Folder>
+  <Folder Name="/8 - k8s/base/api/">
+    <File Path="k8s/base/api/configmap.yaml" />
+    <File Path="k8s/base/api/deployment.yaml" />
+    <File Path="k8s/base/api/kustomization.yaml" />
+    <File Path="k8s/base/api/pdb.yaml" />
+    <File Path="k8s/base/api/service.yaml" />
+    <File Path="k8s/base/api/serviceaccount.yaml" />
+  </Folder>
+  <Folder Name="/8 - k8s/overlays/" />
+  <Folder Name="/8 - k8s/overlays/aws-eks/">
+    <File Path="k8s/overlays/aws-eks/configmap-patch.yaml" />
+    <File Path="k8s/overlays/aws-eks/hpa.yaml" />
+    <File Path="k8s/overlays/aws-eks/kustomization.yaml" />
+  </Folder>
+  <Folder Name="/8 - k8s/ci-cd/">
+    <File Path=".github/workflows/deploy.yml" />
+    <File Path=".github/workflows/manifest-validation.yml" />
   </Folder>
   <Project Path="docker-compose/docker-compose.dcproj">
     <Build />
