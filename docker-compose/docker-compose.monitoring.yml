@@ -8,6 +8,10 @@ services:
     environment:
       GF_SECURITY_ADMIN_USER: "admin"
       GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-admin}"
+      # Acesso sem login para a demo local (porta publicada só em localhost).
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
       # Injeta o ponto zero de cada série nova a partir do start time do OTLP,
       # para que increase() conte também o primeiro evento após um restart da API.
       PROMETHEUS_EXTRA_ARGS: "--enable-feature=created-timestamp-zero-ingestion"

@@ -24,7 +24,7 @@ docker compose \
 
 | Serviço | Endereço |
 | --- | --- |
-| Grafana | `http://localhost:3000` (usuário `admin`, senha `admin`) |
+| Grafana | `http://localhost:3000` (sem login; publicado só em `localhost`) |
 | API | `http://localhost:8080` |
 | OTLP | `localhost:4317` (gRPC) e `localhost:4318` (HTTP) |
 
