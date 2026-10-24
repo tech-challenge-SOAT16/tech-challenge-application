@@ -39,6 +39,7 @@ using TechChallenge.Application.Features.Inventario.ExcluirItemInventario;
 using TechChallenge.Application.Features.Inventario.ListarInventario;
 using TechChallenge.Application.Features.Inventario.ObterItemInventario;
 using TechChallenge.Application.Features.OS.AprovarOrcamento;
+using TechChallenge.Application.Features.OS.AreaCliente;
 using TechChallenge.Application.Features.OS.AtribuirOS;
 using TechChallenge.Application.Features.OS.CancelarOS;
 using TechChallenge.Application.Features.OS.CriarOS;
@@ -120,6 +121,7 @@ namespace TechChallenge.Infrastructure.IoC.Injection
             services.AddScoped<CancelarOSService>();
             services.AddScoped<ListarOSOficinaService>();
             services.AddScoped<ExcluirOSService>();
+            services.AddScoped<OrdensServicoClienteService>();
 
             services.AddScoped<AdicionarEstoqueService>();
             services.AddScoped<BaixarEstoqueService>();

@@ -111,6 +111,7 @@ app.MapCategoriaVeiculoEndpoints();
 app.MapEstoqueEndpoints();
 app.MapIntegracoesEndpoints();
 app.MapDecisoesOrcamentoEmailEndpoints();
+app.MapAreaClienteEndpoints();
 
 await app.RunAsync();
 
