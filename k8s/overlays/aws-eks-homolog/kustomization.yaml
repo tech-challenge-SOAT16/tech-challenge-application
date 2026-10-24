@@ -23,5 +23,5 @@ images:
   # e a tag imutável (SHA do commit). Os valores abaixo são apenas placeholders
   # para renderização local com `kubectl kustomize`.
   - name: techchallenge-application
-    newName: 000000000000.dkr.ecr.us-east-1.amazonaws.com/techchallenge-application
-    newTag: latest
+    newName: 467823162079.dkr.ecr.us-east-1.amazonaws.com/techchallenge-application
+    newTag: c126b0782835
