@@ -1,151 +1,92 @@
 name: Deploy to Amazon EKS
-
 on:
   push:
-    branches:
-      - main
+    branches: [main, develop]
+    paths-ignore:
+      - 'k8s/overlays/**'
+      - 'docs/**'
+      - '*.md'
   workflow_dispatch:
-
-# OIDC: o id-token é usado para assumir a IAM Role sem credenciais de longa duração.
 permissions:
   contents: read
-  id-token: write
-
-# Garante um deploy por vez; não cancela um rollout em andamento.
 concurrency:
   group: deploy-eks-${{ github.ref }}
   cancel-in-progress: false
-
-env:
-  ECR_REPOSITORY: techchallenge-application
-  KUSTOMIZE_OVERLAY: k8s/overlays/aws-eks
-  K8S_NAMESPACE: techchallenge
-  DEPLOYMENT_NAME: techchallenge-api
-  KUSTOMIZE_VERSION: v5.4.3
-
 jobs:
   validate:
     name: Build and test
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-
-      - name: Restore
-        run: dotnet restore TechChallenge.slnx
-
-      - name: Build
-        run: dotnet build TechChallenge.slnx --configuration Release --no-restore
-
-      - name: Unit tests
-        run: dotnet test tests/TechChallenge.Tests/TechChallenge.Tests.csproj --configuration Release --no-build
-
-      - name: Integration tests
-        run: dotnet test tests/TechChallenge.IntegrationTests/TechChallenge.IntegrationTests.csproj --configuration Release --no-build
-
+      - run: dotnet restore TechChallenge.slnx
+      - run: dotnet build TechChallenge.slnx --configuration Release --no-restore
+      - run: dotnet test tests/TechChallenge.Tests/TechChallenge.Tests.csproj --configuration Release --no-build
+      - run: dotnet test tests/TechChallenge.IntegrationTests/TechChallenge.IntegrationTests.csproj --configuration Release --no-build
   deploy:
-    name: Build image and deploy
+    name: Publish image and propose GitOps deployment
     needs: validate
+    if: vars.AWS_DEPLOY_ENABLED == 'true' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
     runs-on: ubuntu-latest
-    environment: production
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'homolog' }}
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      ECR_REPOSITORY: techchallenge-application
+      OVERLAY: ${{ github.ref == 'refs/heads/main' && 'aws-eks' || 'aws-eks-homolog' }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
-          fetch-depth: 0
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
-
-      - name: Login to Amazon ECR
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      - uses: aws-actions/amazon-ecr-login@v2
         id: ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Resolve image reference
+      - name: Resolve immutable image
         id: image
-        shell: bash
-        run: |
-          set -euo pipefail
-          tag="${GITHUB_SHA::12}"
-          registry="${{ steps.ecr.outputs.registry }}"
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-          echo "uri=${registry}/${ECR_REPOSITORY}:${tag}" >> "$GITHUB_OUTPUT"
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and push image to ECR
-        uses: docker/build-push-action@v6
+        run: echo "uri=${{ steps.ecr.outputs.registry }}/${ECR_REPOSITORY}:${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
         with:
           context: .
           file: src/TechChallenge.Api/Dockerfile
           platforms: linux/amd64
           provenance: false
           push: true
-          tags: |
-            ${{ steps.image.outputs.uri }}
-            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
-          labels: |
-            org.opencontainers.image.revision=${{ github.sha }}
+          tags: ${{ steps.image.outputs.uri }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v4
-        with:
-          version: v1.30.4
-
-      - name: Install kustomize
-        shell: bash
+      - name: Prepare deployment branch from main
+        env:
+          IMAGE: ${{ steps.image.outputs.uri }}
         run: |
           set -euo pipefail
-          url="https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz"
-          curl -fsSL "$url" -o kustomize.tar.gz
-          tar -xzf kustomize.tar.gz
-          sudo install -m 0755 kustomize /usr/local/bin/kustomize
-          kustomize version
-
-      - name: Update kubeconfig for EKS
-        shell: bash
-        run: |
-          set -euo pipefail
-          aws eks update-kubeconfig \
-            --name "${{ vars.EKS_CLUSTER_NAME }}" \
-            --region "${{ vars.AWS_REGION }}"
-
-      - name: Set image tag in overlay
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "${KUSTOMIZE_OVERLAY}"
-          kustomize edit set image "${ECR_REPOSITORY}=${{ steps.image.outputs.uri }}"
-          echo "Overlay renderizado:"
-          kustomize build .
-
-      - name: Apply manifests
-        shell: bash
-        run: |
-          set -euo pipefail
-          kubectl apply -k "${KUSTOMIZE_OVERLAY}"
-
-      - name: Wait for rollout
-        shell: bash
-        run: |
-          set -euo pipefail
-          kubectl -n "${K8S_NAMESPACE}" rollout status \
-            "deployment/${DEPLOYMENT_NAME}" --timeout=300s
-
-      - name: Deployment summary
-        if: always()
-        shell: bash
-        run: |
-          kubectl -n "${K8S_NAMESPACE}" get deployment,pod,svc,hpa,pdb \
-            -l app.kubernetes.io/name="${DEPLOYMENT_NAME}" || true
+          git fetch origin main
+          branch="deploy/${OVERLAY}-${GITHUB_RUN_ID}"
+          git checkout -b "$branch" origin/main
+          python3 - <<'PY'
+          import os,re
+          from pathlib import Path
+          p=Path('k8s/overlays')/os.environ['OVERLAY']/'kustomization.yaml'
+          name,tag=os.environ['IMAGE'].rsplit(':',1)
+          s=p.read_text()
+          s=re.sub(r'newName: .*', 'newName: '+name,s)
+          s=re.sub(r'newTag: .*', 'newTag: '+tag,s)
+          p.write_text(s)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "k8s/overlays/$OVERLAY/kustomization.yaml"
+          if git diff --cached --quiet; then
+            echo 'The desired image is already in Git.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git commit -m "deploy: update ${OVERLAY} image"
+          git push origin "$branch"
+          printf 'Image: `%s`\n\nBranch: `%s`\n\nOpen a reviewed PR: https://github.com/%s/compare/main...%s\n\nAfter merge Argo CD performs the rollout automatically.\n' "$IMAGE" "$branch" "$GITHUB_REPOSITORY" "$branch" >> "$GITHUB_STEP_SUMMARY"
