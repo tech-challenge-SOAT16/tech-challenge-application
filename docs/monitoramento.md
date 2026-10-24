@@ -31,6 +31,10 @@ docker compose \
 Para gerar dados, execute [docs/demo/fase-3/monitoramento.http](demo/fase-3/monitoramento.http)
 ou o fluxo completo de [docs/demo/fase-2](demo/fase-2/README.md).
 
+No AWS EKS a mesma stack roda no cluster (Argo CD, Kong, Prometheus, Loki,
+Tempo e Grafana); o passo a passo está em
+[docs/demo/fase-3/README.md](demo/fase-3/README.md).
+
 Sem `OTEL_EXPORTER_OTLP_ENDPOINT`, a exportação OTLP fica desligada e a API
 apenas escreve logs JSON no console (testes e CI não mudam).
 
