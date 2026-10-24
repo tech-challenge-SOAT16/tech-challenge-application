@@ -5,10 +5,10 @@ entrega por GitOps (Argo CD), Kong como gateway e monitoramento com
 OpenTelemetry e Grafana. A infraestrutura fica no repositório
 [tech-challenge-k8s](https://github.com/tech-challenge-SOAT16/tech-challenge-k8s).
 
-> Pendências para o roteiro completo: overlay `k8s/overlays/aws-eks-homolog`
-> (namespace `techchallenge-homolog`, login local e dados de demo ligados),
-> `deploy.yml` gravando a tag nos overlays em vez de `kubectl apply` e o
-> repositório `tech-challenge-database` (banco e Secret da API).
+> Pendências para o roteiro na AWS: overlay `k8s/overlays/aws-eks-homolog`
+> (namespace `techchallenge-homolog`, dados de demo ligados), `deploy.yml`
+> gravando a tag nos overlays em vez de `kubectl apply` e acesso ao AWS
+> Academy. Sem AWS, use a [demo local completa](#demo-local-completa-sem-aws).
 
 ## 1. Credenciais da AWS no GitHub (uma vez)
 
@@ -108,13 +108,17 @@ kubectl -n kong get svc kong-gateway-proxy -o jsonpath='{.status.loadBalancer.in
 
 1. **Infraestrutura**: pipeline do `tech-challenge-k8s` (fmt, validate, tflint,
    testes, plan e apply) e o cluster no console da AWS.
-2. **GitOps**: Argo CD em `/argocd` com as Applications por sync wave
+2. **Autenticação com CPF**: [cliente-cpf.http](cliente-cpf.http) com
+   `@lambdaUrl` apontando para o API Gateway da Lambda e `@apiUrl` para o Kong:
+   código no e-mail, JWT emitido, OS do próprio cliente (200) e rota da oficina
+   recusada (401).
+3. **GitOps**: Argo CD em `/argocd` com as Applications por sync wave
    (observabilidade, Kong, Mailpit e API em homologação e produção).
-3. **Fluxo de negócio em homologação**: os arquivos de
+4. **Fluxo de negócio em homologação**: os arquivos de
    [docs/demo/fase-2](../fase-2/README.md) com `@baseUrl =
    http://localhost:8000/homolog`; aprovação do orçamento pelo e-mail no
    Mailpit.
-4. **Monitoramento**: execute [monitoramento.http](monitoramento.http) com o
+5. **Monitoramento**: execute [monitoramento.http](monitoramento.http) com o
    mesmo `@baseUrl` algumas vezes e mostre no Grafana:
    - dashboard *TechChallenge - Ordens de Serviço* (volume diário, tempo médio
      por status, erros de integração, latência, uptime, CPU e memória);
@@ -122,9 +126,9 @@ kubectl -n kong get svc kong-gateway-proxy -o jsonpath='{.status.loadBalancer.in
    - *Explore* → Loki `{service_name="techchallenge-api"} | CorrelationId="demo-monitoramento"`
      e o trace correspondente no Tempo;
    - dashboards padrão do Kubernetes (CPU e memória dos pods).
-5. **Alerta**: gere falhas (passos 9 a 11 do `monitoramento.http`) e mostre o
+6. **Alerta**: gere falhas (passos 9 a 11 do `monitoramento.http`) e mostre o
    alerta disparado e o e-mail do Alertmanager no Mailpit de produção.
-6. **Deploy contínuo**: merge de um PR desta aplicação → pipeline publica a
+7. **Deploy contínuo**: merge de um PR desta aplicação → pipeline publica a
    imagem e commita a tag no overlay → Argo CD passa de `OutOfSync` para
    `Synced` e faz o rollout.
 
@@ -137,9 +141,39 @@ Para poupar o crédito do Learner Lab, no `tech-challenge-k8s` rode *Run
 workflow* com `destroy`. O Argo CD remove os recursos (inclusive o NLB) antes
 do cluster ser apagado.
 
-## Alternativas sem AWS
+## Demo local completa (sem AWS)
 
-- **Docker compose**: [docs/monitoramento.md](../../monitoramento.md) sobe a API
-  com `grafana/otel-lgtm`; mesmos dashboards e alertas.
-- **kind**: `terraform/local` do `tech-challenge-k8s` sobe Argo CD, Kong e a
-  stack de observabilidade num cluster local (`http://localhost:9080`).
+Sobe a API, PostgreSQL, Mailpit, a stack de monitoramento e a Lambda de
+autenticação por CPF (build direto do repositório `tech-challenge-lambda`). Na
+raiz deste repositório:
+
+```bash
+docker compose -f docker-compose/docker-compose.yml -f docker-compose/docker-compose.override.yml -f docker-compose/docker-compose.lambda.yml up -d --build db mailpit otel-lgtm techchallenge.api lambda-auth
+```
+
+Em cerca de um minuto (mais na primeira vez, por causa dos builds):
+
+| Serviço | Endereço | Acesso |
+| --- | --- | --- |
+| API e Swagger | `http://localhost:8080/swagger` | funcionários de demo, senha `Demo@123` |
+| Lambda de autenticação | `http://localhost:9180` | CPF `123.456.789-09` (Cliente Demo) |
+| Mailpit | `http://localhost:8025` | e-mails da API e códigos de login da Lambda |
+| Grafana | `http://localhost:3000` | sem login |
+
+Roteiro local:
+
+1. [cliente-cpf.http](cliente-cpf.http): login por CPF, código no Mailpit, JWT
+   e área do cliente; a rota da oficina com o token de cliente responde 401.
+2. [monitoramento.http](monitoramento.http) e os arquivos de
+   [docs/demo/fase-2](../fase-2/README.md): fluxo completo da OS como
+   funcionário. A OS criada aparece também na área do cliente.
+3. Grafana: dashboard *TechChallenge - Ordens de Serviço* (página inicial),
+   *ASP.NET Core*, *ASP.NET Core Endpoint*, Explore no Loki e no Tempo e os
+   alertas da pasta TechChallenge.
+
+Para encerrar, troque `up -d --build ...` por `down` (ou `down -v` para apagar
+os dados). Sem o arquivo `docker-compose.lambda.yml` a API sobe sem a área do
+cliente, só com o monitoramento.
+
+Também sem AWS, o `terraform/local` do `tech-challenge-k8s` sobe Argo CD, Kong
+e a stack de observabilidade num cluster kind (`http://localhost:9080`).

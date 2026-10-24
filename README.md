@@ -210,7 +210,9 @@ docker compose \
 
 A API ficará em `http://localhost:8080`, o Mailpit em
 `http://localhost:8025`, o Grafana em `http://localhost:3000` e o PostgreSQL em
-`localhost:5432`. A coleção de
+`localhost:5432`. Para incluir a Lambda de autenticação por CPF e a área do
+cliente, adicione `-f docker-compose/docker-compose.lambda.yml`; o passo a passo
+completo está em [docs/demo/fase-3](docs/demo/fase-3/README.md). A coleção de
 requisições pronta para apresentação está em
 [docs/demo/fase-2](docs/demo/fase-2/README.md).
 
@@ -232,8 +234,8 @@ por emulação.
 
 A API exporta traces, métricas e logs via OpenTelemetry. O compose inclui o
 `grafana/otel-lgtm` (Collector, Prometheus, Loki, Tempo e Grafana) com os
-dashboards e alertas já provisionados. Grafana em `http://localhost:3000`
-(`admin`/`admin`). Detalhes em [docs/monitoramento.md](docs/monitoramento.md);
+dashboards e alertas já provisionados. Grafana em `http://localhost:3000`,
+sem login. Detalhes em [docs/monitoramento.md](docs/monitoramento.md);
 requisições para gerar dados em
 [docs/demo/fase-3/monitoramento.http](docs/demo/fase-3/monitoramento.http).
 
