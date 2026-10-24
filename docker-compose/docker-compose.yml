@@ -1,3 +1,6 @@
+include:
+  - docker-compose.monitoring.yml
+
 services:
   techchallenge.api:
     image: ${DOCKER_REGISTRY-}techchallengeapi
@@ -14,11 +17,23 @@ services:
       Smtp__AllowInsecureConnection: "true"
       Smtp__FromAddress: "nao-responda@oficina.local"
       Smtp__FromName: "Oficina Tech Challenge"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-lgtm:4317"
+      OTEL_SERVICE_NAME: "techchallenge-api"
+      Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command: "Warning"
     depends_on:
       db:
         condition: service_healthy
       mailpit:
         condition: service_started
+      otel-lgtm:
+        condition: service_started
+    # Mesmo endpoint do readiness probe do Kubernetes; alimenta o painel de health checks.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health/ready HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && grep -q ' 200 ' <&3"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
     build:
       context: ..
       dockerfile: src/TechChallenge.Api/Dockerfile

@@ -2,26 +2,33 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: techchallenge-api-config
-# Configuração NÃO sensível do ambiente AWS EKS.
-# A terminação TLS e o roteamento ficam no API Gateway, à frente do cluster.
+# Configuração NÃO sensível do ambiente AWS EKS. O roteamento fica no Kong
+# (tech-challenge-k8s); segredos vêm do Secret techchallenge-api-secrets
+# (tech-challenge-database).
 data:
   ASPNETCORE_ENVIRONMENT: "Production"
   ASPNETCORE_HTTP_PORTS: "8080"
-  # TLS é encerrado no API Gateway; dentro do cluster o tráfego é HTTP.
+  # TLS termina antes do cluster; dentro dele o tráfego é HTTP.
   Http__UseHttpsRedirection: "false"
 
-  # Resource server: valida somente JWT RS256 emitido pela Function Serverless.
-  # Substituir o placeholder pela URL pública do emissor no API Gateway. A URL
-  # deve publicar {Authority}/.well-known/openid-configuration e apontar para o JWKS.
-  Jwt__Authority: "https://replace-me.execute-api.us-east-1.amazonaws.com/auth"
-  Jwt__Issuer: "https://replace-me.execute-api.us-east-1.amazonaws.com/auth"
-  Jwt__Audience: "techchallenge-api"
-  Jwt__RequireHttpsMetadata: "true"
-  Jwt__EnableLocalIssuance: "false"
+  # Funcionários: login pela própria API (JWT HS256). A chave
+  # Jwt__LocalSigningKey vem do Secret techchallenge-api-secrets.
+  Jwt__EnableLocalIssuance: "true"
+  Jwt__Issuer: "techchallenge-api"
+  Jwt__Audience: "techchallenge-funcionarios"
+
+  # Clientes: JWT RS256 emitido pela Function Serverless (login por CPF), aceito
+  # só nas rotas /api/v1/cliente. Authority e Issuer recebem o output `issuer`
+  # do tech-challenge-lambda (URL do API Gateway da Function).
+  CustomerAuth__Enabled: "true"
+  CustomerAuth__Authority: "https://replace-me.execute-api.us-east-1.amazonaws.com"
+  CustomerAuth__Issuer: "https://replace-me.execute-api.us-east-1.amazonaws.com"
+  CustomerAuth__Audience: "tech-challenge-api"
+  CustomerAuth__RequireHttpsMetadata: "true"
 
   # Links de aprovação/recusa do orçamento. Ajustar BaseUrl para a URL pública
-  # do API Gateway quando ela estiver definida pelo repositório de infraestrutura.
-  ApprovalLinks__BaseUrl: "https://replace-me.execute-api.us-east-1.amazonaws.com"
+  # do Kong quando ela estiver definida pelo tech-challenge-k8s.
+  ApprovalLinks__BaseUrl: "https://replace-me.example.com"
   ApprovalLinks__ExpirationHours: "48"
 
   # Worker de notificações (outbox).
@@ -33,9 +40,13 @@ data:
   Seed__FakeData: "false"
   Seed__DemoData: "false"
 
-  # SMTP não sensível. Host/credenciais do provedor gerenciado (ex.: SES) são
-  # fornecidos pelo Secret techchallenge-api-secrets.
-  Smtp__UseSsl: "true"
-  Smtp__AllowInsecureConnection: "false"
+  # SMTP: Mailpit do namespace (host e porta vêm do Secret). O Mailpit não usa
+  # TLS; trocar para "true"/"false" ao usar um provedor real.
+  Smtp__UseSsl: "false"
+  Smtp__AllowInsecureConnection: "true"
   Smtp__FromAddress: "nao-responda@techchallenge.local"
   Smtp__FromName: "Oficina Tech Challenge"
+
+  # OpenTelemetry: traces, métricas e logs para o collector do cluster.
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.monitoring.svc.cluster.local:4317"
+  OTEL_SERVICE_NAME: "techchallenge-api"

@@ -1,0 +1,41 @@
+### Login do cliente por CPF na Lambda e consumo da área do cliente na API.
+### Requer a stack com docker-compose/docker-compose.lambda.yml (ver README desta pasta).
+### O "Cliente Demo" do seed tem o CPF 123.456.789-09.
+@lambdaUrl = http://localhost:9180
+@apiUrl = http://localhost:8080
+
+### 1. Pedir o código de login. A resposta é igual para CPF existente ou não.
+# @name loginCpf
+POST {{lambdaUrl}}/auth/login
+Content-Type: application/json
+
+{ "cpf": "12345678909" }
+
+> {% client.global.set("challengeId", response.body.challenge_id); %}
+
+### 2. Abra o Mailpit (http://localhost:8025), copie o código de 6 dígitos
+###    do e-mail mais recente e cole em @codigo abaixo.
+@codigo = 000000
+
+### 3. Trocar o código pelo JWT (RS256, scope=customer, sub = Id do cliente)
+# @name verificarCodigo
+POST {{lambdaUrl}}/auth/verify
+Content-Type: application/json
+
+{ "challenge_id": "{{challengeId}}", "code": "{{codigo}}" }
+
+> {% client.global.set("clienteToken", response.body.access_token); %}
+
+### 4. Chaves públicas usadas pela API para validar o token
+GET {{lambdaUrl}}/.well-known/jwks.json
+
+### 5. Área do cliente: somente as OS do próprio cliente (200)
+GET {{apiUrl}}/api/v1/cliente/ordens-servico
+Authorization: Bearer {{clienteToken}}
+
+### 6. Rota da oficina com o token de cliente: recusada (401)
+GET {{apiUrl}}/api/v1/clientes
+Authorization: Bearer {{clienteToken}}
+
+### 7. Sem token: recusada (401)
+GET {{apiUrl}}/api/v1/cliente/ordens-servico

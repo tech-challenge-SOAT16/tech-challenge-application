@@ -65,6 +65,19 @@ namespace TechChallenge.Infrastructure.Database.Repositories
             return await base.UpdateAsync(entity);
         }
 
+        public async Task<List<OrdemServico>> GetByClienteAsync(Guid clienteId)
+        {
+            return await _context.OrdemServico
+                .AsNoTracking()
+                .Where(os => os.ClienteResponsavelId == clienteId)
+                .Include(os => os.Servicos)
+                .ThenInclude(oss => oss.Servico)
+                .Include(os => os.Produtos)
+                .ThenInclude(osp => osp.Produto)
+                .OrderByDescending(os => os.DataCriacao)
+                .ToListAsync();
+        }
+
         public async Task<List<OrdemServico>> GetByStatusAsync(StatusOS status)
         {
             return await _context.OrdemServico

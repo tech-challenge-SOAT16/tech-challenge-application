@@ -15,8 +15,8 @@ public sealed class JwtOptions
     public string MetadataAddress { get; set; } = string.Empty;
     public bool RequireHttpsMetadata { get; set; } = true;
 
-    // Compatibilidade temporária para desenvolvimento/testes. Produção proíbe
-    // explicitamente a emissão local de access tokens.
+    // Emissão local (HS256) dos tokens de funcionários, com chave vinda do
+    // Secret. Clientes usam o JWT da Function Serverless (CustomerAuth).
     public bool EnableLocalIssuance { get; set; }
     public string LocalSigningKey { get; set; } = string.Empty;
 

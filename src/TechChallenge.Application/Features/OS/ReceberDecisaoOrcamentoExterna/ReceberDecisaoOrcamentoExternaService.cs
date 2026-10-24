@@ -1,4 +1,5 @@
 using FluentValidation;
+using TechChallenge.Application.Abstractions.Observability;
 using TechChallenge.Application.Abstractions.Repositories;
 using TechChallenge.Domain.Enums;
 using TechChallenge.Domain.Exceptions;
@@ -39,6 +40,7 @@ public class ReceberDecisaoOrcamentoExternaService
                     $"O evento externo {eventoId} já foi registrado com outro conteúdo.");
             }
 
+            RegistrarDecisao(command.Decisao, "duplicada");
             return new ReceberDecisaoOrcamentoExternaResult(
                 eventoId,
                 decisaoExistente.OrdemServicoId,
@@ -63,6 +65,8 @@ public class ReceberDecisaoOrcamentoExternaService
         if (processado)
             await _ordemServicoRepository.UpdateAsync(ordemServico);
 
+        RegistrarDecisao(command.Decisao, processado ? "processada" : "duplicada");
+
         return new ReceberDecisaoOrcamentoExternaResult(
             eventoId,
             ordemServico.Id,
@@ -70,4 +74,10 @@ public class ReceberDecisaoOrcamentoExternaService
             processado,
             !processado);
     }
+
+    private static void RegistrarDecisao(DecisaoOrcamento decisao, string resultado) =>
+        TechChallengeMetrics.DecisoesExternas.Add(
+            1,
+            new KeyValuePair<string, object?>("decisao", decisao.ToString()),
+            new KeyValuePair<string, object?>("resultado", resultado));
 }

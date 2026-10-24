@@ -11,8 +11,10 @@ using TechChallenge.Infrastructure.Auth;
 using TechChallenge.Infrastructure.Database.Context;
 using TechChallenge.Infrastructure.Database.Seeding;
 using TechChallenge.Infrastructure.IoC.Injection;
+using TechChallenge.Infrastructure.Observability;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.AddObservability();
 
 builder.Services.AddOpenApi(options =>
 {
@@ -67,6 +69,7 @@ if (!app.Environment.IsEnvironment("Testing"))
     await DataSeeder.SeedAsync(app.Services);
 }
 
+app.UseCorrelationId();
 app.UseMiddleware<ExceptionMiddleware>();
 
 app.MapHealthChecks("/health/live", new HealthCheckOptions
@@ -108,6 +111,7 @@ app.MapCategoriaVeiculoEndpoints();
 app.MapEstoqueEndpoints();
 app.MapIntegracoesEndpoints();
 app.MapDecisoesOrcamentoEmailEndpoints();
+app.MapAreaClienteEndpoints();
 
 await app.RunAsync();
 

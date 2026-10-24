@@ -1,0 +1,258 @@
+# Regras de alerta provisionadas no Grafana local (otel-lgtm).
+{
+  "apiVersion": 1,
+  "groups": [
+    {
+      "orgId": 1,
+      "name": "techchallenge",
+      "folder": "TechChallenge",
+      "interval": "30s",
+      "rules": [
+        {
+          "uid": "tc-os-falhas",
+          "title": "Falhas no processamento de ordens de serviço (5xx)",
+          "condition": "C",
+          "for": "1m",
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "critical",
+            "service": "techchallenge-api"
+          },
+          "annotations": {
+            "summary": "Erros internos (5xx) em rotas de ordens de serviço nos últimos 5 minutos: {{ $values.B }}",
+            "dashboardUid": "techchallenge-os"
+          },
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "sum(increase(techchallenge_processamento_falhas_total{area=\"ordens-servico\",status_code=~\"5..\"}[5m])) or vector(0)",
+                "instant": true,
+                "range": false
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last"
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "uid": "tc-notificacoes-falhas",
+          "title": "Falhas no envio de notificações",
+          "condition": "C",
+          "for": "1m",
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "warning",
+            "service": "techchallenge-api"
+          },
+          "annotations": {
+            "summary": "Falhas no envio de e-mails da outbox nos últimos 5 minutos: {{ $values.B }}",
+            "dashboardUid": "techchallenge-os"
+          },
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "sum(increase(techchallenge_notificacoes_falhas_total[5m])) or vector(0)",
+                "instant": true,
+                "range": false
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last"
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "uid": "tc-api-5xx",
+          "title": "Taxa de erro 5xx da API acima de 5%",
+          "condition": "C",
+          "for": "1m",
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "critical",
+            "service": "techchallenge-api"
+          },
+          "annotations": {
+            "summary": "Taxa de 5xx nos últimos 5 minutos: {{ $values.B }}%",
+            "dashboardUid": "techchallenge-os"
+          },
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "(sum(rate(http_server_request_duration_seconds_count{job=\"techchallenge-api\",http_response_status_code=~\"5..\"}[5m])) or vector(0)) / (sum(rate(http_server_request_duration_seconds_count{job=\"techchallenge-api\"}[5m])) > 0) * 100",
+                "instant": true,
+                "range": false
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last"
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        5
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "uid": "tc-api-latencia",
+          "title": "Latência p95 da API acima de 1s",
+          "condition": "C",
+          "for": "2m",
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "warning",
+            "service": "techchallenge-api"
+          },
+          "annotations": {
+            "summary": "p95 nos últimos 5 minutos: {{ $values.B }}s",
+            "dashboardUid": "techchallenge-os"
+          },
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "datasourceUid": "prometheus",
+              "model": {
+                "refId": "A",
+                "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{job=\"techchallenge-api\",http_route!~\"/health.*\"}[5m])))",
+                "instant": true,
+                "range": false
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last"
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        1
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

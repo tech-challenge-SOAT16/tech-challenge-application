@@ -304,7 +304,7 @@ public static class OrdensServicoEndpoints
         return Results.NoContent();
     }
 
-    private static OrdemServicoResponse MapToResponse(Domain.Entities.OrdemServico os) => new()
+    internal static OrdemServicoResponse MapToResponse(Domain.Entities.OrdemServico os) => new()
     {
         Id = os.Id,
         Descricao = os.Descricao,

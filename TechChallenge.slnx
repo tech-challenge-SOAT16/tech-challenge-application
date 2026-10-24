@@ -17,6 +17,7 @@
     <Project Path="src/TechChallenge.Infrastructure.Database/TechChallenge.Infrastructure.Database.csproj" />
     <Project Path="src/TechChallenge.Infrastructure.IoC/TechChallenge.Infrastructure.IoC.csproj" Id="08b3a101-7172-491d-a728-02e933217b7c" />
     <Project Path="src/TechChallenge.Infrastructure.Notifications/TechChallenge.Infrastructure.Notifications.csproj" />
+    <Project Path="src/TechChallenge.Infrastructure.Observability/TechChallenge.Infrastructure.Observability.csproj" />
   </Folder>
   <Folder Name="/5 - tests/">
     <Project Path="tests/TechChallenge.IntegrationTests/TechChallenge.IntegrationTests.csproj" />

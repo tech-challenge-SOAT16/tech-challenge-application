@@ -28,6 +28,7 @@
     <ProjectReference Include="..\TechChallenge.Domain\TechChallenge.Domain.csproj" />
     <ProjectReference Include="..\TechChallenge.Infrastructure.Auth\TechChallenge.Infrastructure.Auth.csproj" />
     <ProjectReference Include="..\TechChallenge.Infrastructure.IoC\TechChallenge.Infrastructure.IoC.csproj" />
+    <ProjectReference Include="..\TechChallenge.Infrastructure.Observability\TechChallenge.Infrastructure.Observability.csproj" />
   </ItemGroup>
 
 </Project>

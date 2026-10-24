@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using TechChallenge.Application.Abstractions.Auth;
 using TechChallenge.Application.Abstractions.Notifications;
@@ -32,14 +33,9 @@ public static class ConfigureServices
         IConfiguration configuration,
         IHostEnvironment environment)
     {
-        var jwt = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
-
-        if (environment.IsProduction() && jwt.EnableLocalIssuance)
-        {
-            throw new InvalidOperationException(
-                "Jwt:EnableLocalIssuance não pode ser habilitado em Production. " +
-                "Access tokens devem ser emitidos exclusivamente pela Function Serverless.");
-        }
+        // Funcionários continuam autenticando pela própria API (emissão local
+        // HS256 com chave do Secret, ou um emissor externo RS256). Clientes usam
+        // o JWT da Function Serverless, no esquema "Customer".
 
         services.AddOptions<JwtOptions>()
             .Bind(configuration.GetSection(JwtOptions.SectionName))
@@ -54,6 +50,16 @@ public static class ConfigureServices
             .Validate(options =>
                     !options.EnableLocalIssuance || options.LocalSigningKey.Length >= 32,
                 "Jwt:LocalSigningKey deve ter no mínimo 32 caracteres quando a emissão local estiver habilitada.")
+            .ValidateOnStart();
+
+        services.AddOptions<CustomerAuthOptions>()
+            .Bind(configuration.GetSection(CustomerAuthOptions.SectionName))
+            .Validate(options => !options.Enabled ||
+                    (!string.IsNullOrWhiteSpace(options.Issuer) && !string.IsNullOrWhiteSpace(options.Audience)),
+                "CustomerAuth:Issuer e CustomerAuth:Audience são obrigatórios quando CustomerAuth:Enabled=true.")
+            .Validate(options => !options.Enabled ||
+                    IsValidMetadataSource(options.Authority, options.MetadataAddress, options.RequireHttpsMetadata),
+                "Configure CustomerAuth:Authority ou CustomerAuth:MetadataAddress com uma URL OIDC válida.")
             .ValidateOnStart();
 
         services.AddOptions<ApprovalLinkTokenOptions>()
@@ -94,12 +100,35 @@ public static class ConfigureServices
         services.AddScoped<AlterarStatusUsuarioService>();
         services.AddScoped<ResetarSenhaService>();
 
+        // Os dois esquemas leem as opções já resolvidas (inclui overrides de ambiente
+        // e de testes). Sem CustomerAuth:Enabled, o esquema "Customer" não tem chaves
+        // e as rotas da área do cliente não são mapeadas.
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-            .AddJwtBearer(options => ConfigureJwtBearer(options, jwt));
+            .AddJwtBearer()
+            .AddJwtBearer(CustomerAuthOptions.SchemeName, _ => { });
+
+        services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+            .Configure<IOptions<JwtOptions>>((options, jwt) => ConfigureJwtBearer(options, jwt.Value));
+
+        services.AddOptions<JwtBearerOptions>(CustomerAuthOptions.SchemeName)
+            .Configure<IOptions<CustomerAuthOptions>>((options, customer) =>
+            {
+                if (customer.Value.Enabled)
+                    ConfigureCustomerJwtBearer(options, customer.Value);
+            });
 
         services.AddAuthorizationBuilder()
-            // Fallback defensivo: endpoints exigem autenticação por padrão; anônimos usam .AllowAnonymous().
-            .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build())
+            // Fallback defensivo: endpoints sem política própria exigem um funcionário
+            // autenticado com perfil; anônimos usam .AllowAnonymous(). O token de cliente
+            // não passa aqui porque é validado só pelo esquema "Customer".
+            .SetFallbackPolicy(new AuthorizationPolicyBuilder()
+                .RequireAuthenticatedUser()
+                .RequireRole("Administrador", "Vendedor", "Mecanico")
+                .Build())
+            .AddPolicy(CustomerAuthOptions.PolicyName, policy => policy
+                .AddAuthenticationSchemes(CustomerAuthOptions.SchemeName)
+                .RequireAuthenticatedUser()
+                .RequireClaim(CustomerAuthOptions.ScopeClaim, CustomerAuthOptions.ScopeValue))
             .AddPolicy("AdminOnly", policy => policy.RequireRole("Administrador"))
             .AddPolicy("AdminOuVendedor", policy => policy.RequireRole("Administrador", "Vendedor"))
             .AddPolicy("MecanicoOuVendedor", policy => policy.RequireRole("Administrador", "Mecanico", "Vendedor"))
@@ -147,6 +176,32 @@ public static class ConfigureServices
         }
 
         options.TokenValidationParameters = validationParameters;
+    }
+
+    private static void ConfigureCustomerJwtBearer(JwtBearerOptions options, CustomerAuthOptions customer)
+    {
+        options.MapInboundClaims = false;
+        options.RequireHttpsMetadata = customer.RequireHttpsMetadata;
+        options.RefreshOnIssuerKeyNotFound = true;
+
+        if (!string.IsNullOrWhiteSpace(customer.Authority))
+            options.Authority = customer.Authority.TrimEnd('/');
+
+        if (!string.IsNullOrWhiteSpace(customer.MetadataAddress))
+            options.MetadataAddress = customer.MetadataAddress;
+
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ClockSkew = TimeSpan.FromSeconds(30),
+            ValidIssuer = customer.Issuer,
+            ValidAudience = customer.Audience,
+            // Somente RS256 com chave publicada no JWKS da Function.
+            ValidAlgorithms = [SecurityAlgorithms.RsaSha256]
+        };
     }
 
     private static bool IsValidMetadataSource(

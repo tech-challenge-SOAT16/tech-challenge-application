@@ -1,0 +1,26 @@
+# Stack local de observabilidade: OpenTelemetry Collector, Prometheus, Loki,
+# Tempo e Grafana em um único container (grafana/otel-lgtm).
+# A API envia traces, métricas e logs via OTLP para otel-lgtm:4317.
+services:
+  otel-lgtm:
+    image: grafana/otel-lgtm:0.38.0
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: "admin"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-admin}"
+      # Acesso sem login para a demo local (porta publicada só em localhost).
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      # Injeta o ponto zero de cada série nova a partir do start time do OTLP,
+      # para que increase() conte também o primeiro evento após um restart da API.
+      PROMETHEUS_EXTRA_ARGS: "--enable-feature=created-timestamp-zero-ingestion"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/otel-lgtm/grafana/conf/provisioning/dashboards/techchallenge/techchallenge-ordens-servico.json"
+    volumes:
+      - otel-lgtm-data:/data
+      - ./monitoring/dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/techchallenge.yaml:ro
+      - ./monitoring/dashboards:/otel-lgtm/grafana/conf/provisioning/dashboards/techchallenge:ro
+      - ./monitoring/alerting/techchallenge.yaml:/otel-lgtm/grafana/conf/provisioning/alerting/techchallenge.yaml:ro
+
+volumes:
+  otel-lgtm-data:

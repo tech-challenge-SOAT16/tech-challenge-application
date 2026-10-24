@@ -1,0 +1,99 @@
+### Gera dados para os dashboards de monitoramento (Grafana em http://localhost:3000).
+### Execute em ordem. Repita algumas vezes, com intervalos, para popular os tempos por status.
+@baseUrl = http://localhost:8080
+@integrationKey = demo-integration-key-change-me
+@clienteId = aaaaaaaa-0000-0000-0000-000000000001
+@vendedorId = aaaaaaaa-0000-0000-0000-000000000003
+@mecanicoId = aaaaaaaa-0000-0000-0000-000000000005
+@veiculoId = aaaaaaaa-0000-0000-0000-000000000008
+@servicoDiagnosticoId = aaaaaaaa-0000-0000-0000-000000000010
+
+### 1. Login do vendedor
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{ "login": "vendedor.demo", "senha": "Demo@123" }
+
+> {% client.global.set("vendedorToken", response.body.accessToken); %}
+
+### 2. Login do mecânico
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{ "login": "mecanico.demo", "senha": "Demo@123" }
+
+> {% client.global.set("mecanicoToken", response.body.accessToken); %}
+
+### 3. Abrir OS com correlation id próprio (procure "demo-monitoramento" no Loki e no Tempo)
+POST {{baseUrl}}/api/v1/ordens-servico
+Authorization: Bearer {{vendedorToken}}
+Content-Type: application/json
+x-correlation-id: demo-monitoramento
+
+{
+  "descricao": "Demo de monitoramento",
+  "clienteResponsavelId": "{{clienteId}}",
+  "funcionarioResponsavelId": "{{vendedorId}}",
+  "veiculoId": "{{veiculoId}}"
+}
+
+> {% client.global.set("osId", response.body); %}
+
+### 4. Atribuir (Recebida -> Diagnóstico)
+PATCH {{baseUrl}}/api/v1/ordens-servico/{{osId}}/atribuir
+Authorization: Bearer {{mecanicoToken}}
+Content-Type: application/json
+
+{ "mecanicoId": "{{mecanicoId}}" }
+
+### 5. Diagnóstico e envio do orçamento (Diagnóstico -> Aguardando aprovação)
+PATCH {{baseUrl}}/api/v1/ordens-servico/{{osId}}/diagnostico
+Authorization: Bearer {{mecanicoToken}}
+Content-Type: application/json
+
+{ "servicos": [ { "id": "{{servicoDiagnosticoId}}", "quantidade": 1 } ], "produtos": [] }
+
+###
+PATCH {{baseUrl}}/api/v1/ordens-servico/{{osId}}/orcamento/enviar
+Authorization: Bearer {{mecanicoToken}}
+
+### 6. Aprovação externa (Aguardando aprovação -> Execução)
+< {% client.global.set("eventoId", "demo-monitoramento-" + Date.now()); %}
+POST {{baseUrl}}/api/v1/integracoes/orcamentos/respostas
+X-Integration-Key: {{integrationKey}}
+Content-Type: application/json
+
+{ "eventoId": "{{eventoId}}", "ordemServicoId": "{{osId}}", "decisao": "Aprovado", "ocorridoEm": "2026-10-23T09:00:00Z" }
+
+### 7. Mesmo evento repetido (decisão duplicada)
+POST {{baseUrl}}/api/v1/integracoes/orcamentos/respostas
+X-Integration-Key: {{integrationKey}}
+Content-Type: application/json
+
+{ "eventoId": "{{eventoId}}", "ordemServicoId": "{{osId}}", "decisao": "Aprovado", "ocorridoEm": "2026-10-23T09:00:00Z" }
+
+### 8. Finalizar e entregar (Execução -> Finalização -> Entregue)
+PATCH {{baseUrl}}/api/v1/ordens-servico/{{osId}}/finalizar
+Authorization: Bearer {{mecanicoToken}}
+
+###
+PATCH {{baseUrl}}/api/v1/ordens-servico/{{osId}}/entregar
+Authorization: Bearer {{vendedorToken}}
+
+### 9. Falha em OS: transição inválida (400) -> painel e alerta de falhas em OS
+PATCH {{baseUrl}}/api/v1/ordens-servico/{{osId}}/finalizar
+Authorization: Bearer {{mecanicoToken}}
+
+### 10. Falha em OS: OS inexistente (404)
+GET {{baseUrl}}/api/v1/ordens-servico/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{vendedorToken}}
+
+### 11. Erro de integração: corpo inválido no webhook (400) -> painel de erros nas integrações
+POST {{baseUrl}}/api/v1/integracoes/orcamentos/respostas
+X-Integration-Key: {{integrationKey}}
+Content-Type: application/json
+
+{ "eventoId": "invalido", "ordemServicoId": "{{osId}}", "decisao": "Talvez", "ocorridoEm": "2026-10-23T09:00:00Z" }
+
+### 12. Falha de notificação: pare o Mailpit antes de repetir os passos 3 a 8
+### docker compose -f docker-compose/docker-compose.yml -f docker-compose/docker-compose.override.yml stop mailpit

@@ -1,0 +1,9 @@
+apiVersion: 1
+providers:
+  - name: techchallenge
+    folder: TechChallenge
+    type: file
+    disableDeletion: true
+    allowUiUpdates: true
+    options:
+      path: /otel-lgtm/grafana/conf/provisioning/dashboards/techchallenge
