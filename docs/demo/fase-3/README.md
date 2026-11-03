@@ -5,10 +5,7 @@ entrega por GitOps (Argo CD), Kong como gateway e monitoramento com
 OpenTelemetry e Grafana. A infraestrutura fica no repositório
 [tech-challenge-k8s](https://github.com/tech-challenge-SOAT16/tech-challenge-k8s).
 
-> Pendências para o roteiro na AWS: overlay `k8s/overlays/aws-eks-homolog`
-> (namespace `techchallenge-homolog`, dados de demo ligados), `deploy.yml`
-> gravando a tag nos overlays em vez de `kubectl apply` e acesso ao AWS
-> Academy. Sem AWS, use a [demo local completa](#demo-local-completa-sem-aws).
+Sem acesso à AWS, use a [demo local completa](#demo-local-completa-sem-aws).
 
 ## 1. Credenciais da AWS no GitHub (uma vez)
 
@@ -59,8 +56,9 @@ do state" pedindo a renovação dos secrets.
    `apply` (ou merge de um PR em `main`). Cria VPC, EKS, ECR e Argo CD; o Argo CD
    sincroniza Kong, observabilidade, Mailpit e a API.
 2. Banco e Secret da API: pipeline do `tech-challenge-database`.
-3. Imagem da API: pipeline desta aplicação publica no ECR e grava a tag nos
-   overlays `k8s/overlays/aws-eks-homolog` e `k8s/overlays/aws-eks` da `main`.
+3. Imagem da API: pipeline desta aplicação publica no ECR e abre a branch
+   `deploy/...` com a tag; o PR mesclado na `main` atualiza os overlays
+   `k8s/overlays/aws-eks-homolog` e `k8s/overlays/aws-eks`.
 4. Conectar o kubectl e conferir:
 
    ```bash
@@ -129,8 +127,8 @@ kubectl -n kong get svc kong-gateway-proxy -o jsonpath='{.status.loadBalancer.in
 6. **Alerta**: gere falhas (passos 9 a 11 do `monitoramento.http`) e mostre o
    alerta disparado e o e-mail do Alertmanager no Mailpit de produção.
 7. **Deploy contínuo**: merge de um PR desta aplicação → pipeline publica a
-   imagem e commita a tag no overlay → Argo CD passa de `OutOfSync` para
-   `Synced` e faz o rollout.
+   imagem e propõe a tag no overlay → merge do PR de deploy → Argo CD passa de
+   `OutOfSync` para `Synced` e faz o rollout.
 
 O Kong limita a 60 requisições por minuto por IP; repetir os arquivos muito
 rápido retorna `429`.
