@@ -2,7 +2,7 @@
 
 ## Fase 3
 
-- [Pendências e responsáveis por repositório](ToDo.md)
+- [Estado da entrega e decisões da fase](estado-fase-3.md)
 - [Monitoramento e observabilidade](monitoramento.md)
 - [Contrato de autenticação (JWT da Lambda)](autenticacao-fase-3.md)
 - [Demo e roteiro do vídeo](demo/fase-3/README.md)
@@ -41,7 +41,6 @@
 
 ## Estado da revisão
 
-Documentação atualizada em 24/10/2026 para a Fase 3. Monitoramento validado
-localmente (Docker Compose e kind). Sem acesso à AWS até o momento: nada foi
-aplicado no EKS/RDS reais; as pipelines de infraestrutura rodam a validação com
-credenciais provisórias.
+Documentação atualizada em 03/11/2026 para a Fase 3. Infraestrutura e API
+aplicadas no AWS Academy em 24/10/2026 pelas pipelines; o ambiente é
+temporário e o roteiro da demo descreve como recriá-lo.

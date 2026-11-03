@@ -24,14 +24,19 @@ O histórico das fases anteriores está no repositório legado
 
 | Área | Estado |
 | --- | --- |
-| Monitoramento (traces, métricas, logs JSON, correlação, dashboards e alertas) | Concluído e validado localmente |
+| Monitoramento (traces, métricas, logs JSON, correlação, dashboards e alertas) | Concluído |
 | Métricas de negócio da OS (volume, tempo por status, falhas, integrações) | Concluído |
-| Manifests Kubernetes para EKS (probes, HPA, PDB, segurança) | Concluído; overlay de homologação pendente |
-| CI: build, testes unitários e de integração | Concluído |
-| CD por GitOps (pipeline grava a tag; Argo CD aplica) | Pendente: ajuste do `deploy.yml` |
-| Autenticação de clientes com o JWT da Lambda | Concluído e validado com a Lambda local: área do cliente em `/api/v1/cliente` |
+| Manifests Kubernetes para EKS (probes, HPA, PDB, segurança), overlays de homologação e produção | Concluído |
+| CI: build, testes unitários e de integração, validação dos manifests | Concluído |
+| CD por GitOps (pipeline publica a imagem e propõe a tag; Argo CD aplica) | Concluído; deploy no EKS em 24/10/2026 |
+| Autenticação de clientes com o JWT da Lambda: área do cliente em `/api/v1/cliente` | Concluído |
 
-Pendências detalhadas e responsáveis: [docs/ToDo.md](docs/ToDo.md).
+Estado detalhado e decisões: [docs/estado-fase-3.md](docs/estado-fase-3.md).
+
+Deploys ativos: o ambiente roda no AWS Academy, que é temporário e recriado a
+cada sessão, por isso não há endereço fixo; o roteiro em
+[docs/demo/fase-3](docs/demo/fase-3/README.md) mostra como subir o ambiente e
+obter os endereços do Kong (NLB) e do API Gateway da Lambda.
 
 ## Funcionalidades principais
 
@@ -249,7 +254,7 @@ dotnet test tests/TechChallenge.IntegrationTests/TechChallenge.IntegrationTests.
 Última validação registrada:
 
 - 126 testes unitários aprovados;
-- 36 testes de integração aprovados;
+- 46 testes de integração aprovados;
 - build Release sem erros ou avisos.
 
 Estratégia, cenários e limitações: [docs/testes.md](docs/testes.md).
@@ -257,16 +262,18 @@ Estratégia, cenários e limitações: [docs/testes.md](docs/testes.md).
 ## Kubernetes
 
 Este repositório mantém só os manifests da API: `k8s/base` (Deployment,
-Service, ServiceAccount, ConfigMap e PDB) e o overlay `k8s/overlays/aws-eks`
-(imagem do ECR, configuração de produção e HPA de 2 a 10 réplicas por CPU e
-memória). Cluster, namespaces, Kong, observabilidade e o Argo CD ficam no
+Service, ServiceAccount, ConfigMap e PDB) e os overlays
+`k8s/overlays/aws-eks-homolog` (homologação) e `k8s/overlays/aws-eks`
+(produção), cada um com a imagem do ECR, a configuração do ambiente e o HPA de
+2 a 10 réplicas por CPU e memória. Cluster, namespaces, Kong, observabilidade e o Argo CD ficam no
 [tech-challenge-k8s](https://github.com/tech-challenge-SOAT16/tech-challenge-k8s);
 banco e o Secret `techchallenge-api-secrets` ficam no
 [tech-challenge-database](https://github.com/tech-challenge-SOAT16/tech-challenge-database).
 
 O Argo CD lê os overlays da branch `main` deste repositório e aplica a API em
-`techchallenge` (produção) e, quando o overlay `k8s/overlays/aws-eks-homolog`
-existir, em `techchallenge-homolog` (homologação). Sem AWS, o
+`techchallenge-homolog` (homologação) e `techchallenge` (produção). Homologação
+e produção são diretórios na `main`, não branches: promover uma versão é
+levar a tag de um overlay para o outro (ADR 0005 do `tech-challenge-k8s`). O
 mesmo fluxo roda num cluster kind pelo `terraform/local` do repositório de
 infraestrutura. Detalhes dos manifests em [k8s/README.md](k8s/README.md).
 
@@ -277,14 +284,17 @@ infraestrutura. Detalhes dos manifests em [k8s/README.md](k8s/README.md).
 | `build.yml` | Restore e build |
 | `unit-tests.yml` | Testes unitários em push e PR para `main` |
 | `integration-tests.yml` | Testes de integração em push e PR para `main` |
-| `deploy.yml` | Build, testes, publicação da imagem no ECR e deploy no EKS |
+| `deploy.yml` | Build, testes, publicação da imagem no ECR e proposta da tag no overlay (GitOps) |
+| `manifest-validation.yml` | Render dos manifests com kustomize e validação com kubeconform |
 | `discord-notifications.yml` | Aviso de PR e push no Discord (ignorado sem o webhook) |
 
-Fluxo alvo da Fase 3 (GitOps): o `deploy.yml` publica a imagem no ECR e grava a
-nova tag no overlay do ambiente, com commit direto na `main` feito pelo
-`github-actions[bot]`. O Argo CD detecta a mudança e faz o rollout. Hoje o
-`deploy.yml` ainda aplica os manifests com `kubectl`; a troca está registrada em
-[docs/ToDo.md](docs/ToDo.md).
+Fluxo de entrega (GitOps): no push em `main`, o `deploy.yml` roda build e
+testes, publica a imagem `linux/amd64` no ECR com a tag imutável do SHA e abre
+a branch `deploy/<overlay>-<run>` com a nova tag no overlay do ambiente. A tag
+entra na `main` por Pull Request revisado, com os mesmos checks; o Argo CD
+detecta o commit e faz o rollout (`OutOfSync` → `Synced`). A pipeline não tem
+credencial do cluster: usa só as chaves temporárias do AWS Academy para
+publicar no ECR.
 
 ## Segurança
 
@@ -307,7 +317,7 @@ nova tag no overlay do ambiente, com commit direto na `main` feito pelo
 
 | Documento | Conteúdo |
 | --- | --- |
-| [Pendências da Fase 3](docs/ToDo.md) | O que falta, por repositório |
+| [Estado da entrega](docs/estado-fase-3.md) | O que foi entregue por repositório e as decisões da fase |
 | [Monitoramento](docs/monitoramento.md) | Stack, dashboards, métricas, correlação e alertas |
 | [Demo da Fase 3](docs/demo/fase-3/README.md) | Credenciais, subida do ambiente e roteiro do vídeo |
 | [Autenticação da Fase 3](docs/autenticacao-fase-3.md) | Clientes (JWT da Lambda) e funcionários, com diagrama de sequência |

@@ -16,11 +16,18 @@ k8s/
 │       ├── pdb.yaml
 │       └── kustomization.yaml
 └── overlays/
-    └── aws-eks/
+    ├── aws-eks-homolog/        # namespace techchallenge-homolog
+    │   ├── configmap-patch.yaml
+    │   ├── hpa.yaml
+    │   └── kustomization.yaml
+    └── aws-eks/                # namespace techchallenge (produção)
         ├── configmap-patch.yaml
         ├── hpa.yaml
         └── kustomization.yaml
 ```
+
+Homologação e produção são overlays na branch `main`, lidos pelo Argo CD do
+`tech-challenge-k8s` (ADR 0005).
 
 ## Entrada da aplicação
 
@@ -39,8 +46,9 @@ Dois esquemas, configurados no overlay:
   JWKS do emissor e aceito só em `/api/v1/cliente`.
 
 `CustomerAuth__Authority`, `CustomerAuth__Issuer` e `ApprovalLinks__BaseUrl`
-ainda são placeholders `replace-me`, a substituir pelos outputs da Lambda e do
-Kong. Detalhes em [Autenticação da Fase 3](../docs/autenticacao-fase-3.md).
+recebem os endereços do API Gateway da Lambda e do NLB do Kong, que mudam a
+cada sessão do AWS Academy; são atualizados por PR junto com o deploy. Detalhes
+em [Autenticação da Fase 3](../docs/autenticacao-fase-3.md).
 
 ## Secret criado pela infraestrutura
 
@@ -60,55 +68,54 @@ em cada namespace. Este repositório não cria o Secret. Chaves esperadas:
 Issuer, audience e a URL do emissor dos clientes são configurações não
 sensíveis e ficam no ConfigMap.
 
-## GitHub Actions e OIDC AWS
+## GitHub Actions e GitOps
 
-O workflow `.github/workflows/deploy.yml` espera:
+O workflow `.github/workflows/deploy.yml` usa (secrets e variables do
+repositório):
 
-| Nome | Tipo GitHub | Exemplo |
+| Nome | Tipo GitHub | Valor |
 | --- | --- | --- |
-| `AWS_ROLE_ARN` | Secret | `arn:aws:iam::123456789012:role/gh-actions-techchallenge-deploy` |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | Secret | sessão atual do AWS Academy (renovada a cada 4 horas) |
+| `AWS_DEPLOY_ENABLED` | Variable | `true` (sem ela só rodam build e testes) |
 | `AWS_REGION` | Variable | `us-east-1` |
-| `EKS_CLUSTER_NAME` | Variable | `techchallenge-eks` |
 
-O repositório de infraestrutura cria a IAM Role, trust policy OIDC, permissões,
-EKS Access Entry/RBAC, namespace, ECR e Metrics Server.
+No AWS Academy não é possível criar role OIDC; as chaves da sessão servem
+apenas para publicar no ECR. A pipeline não tem credencial do cluster.
 
-Fluxo automático em push para `main`:
+Fluxo em push para `main`:
 
-1. restore, build e testes;
-2. assume IAM Role via OIDC;
-3. build e push no ECR com tag imutável baseada no SHA;
-4. atualiza a imagem no overlay em memória;
-5. `kubectl apply -k k8s/overlays/aws-eks`;
-6. aguarda o rollout do Deployment.
+1. restore, build, testes unitários e de integração;
+2. build e push no ECR com a tag imutável do SHA (`linux/amd64`);
+3. branch `deploy/<overlay>-<run>` com a nova tag no `kustomization.yaml` do
+   overlay (`aws-eks` para `main`, `aws-eks-homolog` para `develop`);
+4. Pull Request revisado leva a tag para a `main`;
+5. o Argo CD do
+   [tech-challenge-k8s](https://github.com/tech-challenge-SOAT16/tech-challenge-k8s)
+   detecta o commit e faz o rollout.
 
-> **Fluxo alvo (GitOps).** O Argo CD do
-> [tech-challenge-k8s](https://github.com/tech-challenge-SOAT16/tech-challenge-k8s)
-> lê os overlays da `main` deste repositório. Quando o `deploy.yml` for ajustado,
-> os passos 4 a 6 viram um commit da nova tag no overlay, feito pelo
-> `github-actions[bot]` direto na `main`, e o Argo CD aplica. No AWS Academy
-> não é possível criar a role OIDC; a pipeline usará as chaves temporárias da
-> sessão (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`)
-> apenas para publicar no ECR.
+O workflow `manifest-validation.yml` renderiza `k8s/base` e os dois overlays
+com kustomize e valida os manifests com kubeconform em todo PR que toca `k8s/`.
 
-## Validar e aplicar manualmente
+## Validar localmente
 
 ```bash
 kubectl kustomize k8s/base
+kubectl kustomize k8s/overlays/aws-eks-homolog
 kubectl kustomize k8s/overlays/aws-eks
 
-aws eks update-kubeconfig --name <cluster> --region <region>
-kubectl apply -k k8s/overlays/aws-eks
-kubectl -n techchallenge rollout status deployment/techchallenge-api --timeout=300s
+# Com acesso ao cluster
+aws eks update-kubeconfig --name techchallenge-eks --region us-east-1
+kubectl -n argocd get applications
 kubectl -n techchallenge get deploy,pod,svc,hpa,pdb
 ```
 
 ## Escalabilidade e disponibilidade
 
 O HPA mantém de 2 a 10 réplicas, com alvo de 70% de CPU e 80% de memória. O
-PodDisruptionBudget preserva ao menos um pod em interrupções voluntárias. O
+PodDisruptionBudget preserva ao menos um pod em interrupções voluntárias e as
+réplicas são distribuídas entre zonas e nós (`topologySpreadConstraints`). O
 Metrics Server deve existir no cluster. A API usa startup, readiness e liveness
-probes; migrations e seed são executados antes de começar a servir HTTP.
+probes; migrations e seed são executados antes de começar a servir HTTP, sob
+advisory lock do PostgreSQL para que só uma réplica migre por vez.
 
-Todas as configurações e integrações ainda pendentes estão em
-[`docs/ToDo.md`](../docs/ToDo.md).
+Estado da entrega e decisões: [`docs/estado-fase-3.md`](../docs/estado-fase-3.md).

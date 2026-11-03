@@ -4,8 +4,10 @@
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
 USER $APP_UID
 WORKDIR /app
+# A aplicação escuta em ASPNETCORE_HTTP_PORTS=8080 (ver ConfigMap do overlay
+# k8s). O Service ClusterIP e as probes também usam 8080. TLS termina antes do
+# cluster (NLB/Kong), então não há segunda porta.
 EXPOSE 8080
-EXPOSE 8081
 
 
 # This stage is used to build the service project
